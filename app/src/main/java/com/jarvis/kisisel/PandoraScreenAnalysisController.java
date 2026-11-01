@@ -32,7 +32,7 @@ public final class PandoraScreenAnalysisController {
 
     private static void start(Context app,Consumer<String> whenFinished) {
         if(busy) {
-            if(whenFinished!=null)whenFinished.accept("Önceki ekran analizi hâlâ sürüyor.");
+            immediate(app,whenFinished,"Önceki ekran analizi hâlâ sürüyor. Bittiğinde yeniden deneyebilirsin.");
             return;
         }
         if(!PandoraAccessibilityService.isConnected()) {
@@ -84,6 +84,15 @@ public final class PandoraScreenAnalysisController {
 
     private static void analyze(Context app,int ticket,String requestedPackage,String text) {
         if(!busy||ticket!=serial)return;
+        KeyguardManager lock=(KeyguardManager)app.getSystemService(Context.KEYGUARD_SERVICE);
+        if(lock!=null && lock.isDeviceLocked()) {
+            finish(app,ticket,"Telefon kilitlendi; ekran metni analiz edilmeden işlem iptal edildi.");
+            return;
+        }
+        if(!PandoraAccessibilityService.isConnected()) {
+            finish(app,ticket,"Ekran erişimi izni kaldırıldı; analiz iptal edildi.");
+            return;
+        }
         // Do not submit a stale capture if another app became foreground during OCR.
         if(!ScreenCapturePolicy.canUse(requestedPackage,
                 PandoraAccessibilityService.foregroundPackage(),false)) {
