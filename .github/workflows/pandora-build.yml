@@ -1,8 +1,8 @@
 name: PANDORA Stable
 
+# Signed APKs are built only when deliberately requested for a tested batch release.
+# Normal code commits must NOT produce another phone installation.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
