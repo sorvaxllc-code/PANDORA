@@ -38,6 +38,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
     private TextToSpeech tts;
     private boolean ttsReady = false;
     private boolean speaking = false;
+    private boolean stopped = false;
     private final Runnable speechTimeout = () -> {
         if (!stopped && speaking) {
             speaking = false;
@@ -47,7 +48,6 @@ public final class WakeMonitorService extends Service implements RecognitionList
     };
     private boolean listening = false;
     private long lastTriggerMs = 0;
-    private boolean stopped = false;
     private final Runnable retry = this::listenOnce;
 
     @Override public void onCreate() {
