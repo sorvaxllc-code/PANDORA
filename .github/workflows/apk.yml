@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'PANDORA 10.zip'
+      - 'PANDORA%2010.zip'
       - 'app/**'
       - 'tests/**'
       - '*.gradle'
@@ -26,9 +27,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -f "app/build.gradle" ]] && [[ -f "PANDORA 10.zip" ]]; then
+          ARCHIVE="PANDORA 10.zip"
+          [[ -f "$ARCHIVE" ]] || ARCHIVE="PANDORA%2010.zip"
+          if [[ ! -f "app/build.gradle" ]] && [[ -f "$ARCHIVE" ]]; then
             mkdir -p "$RUNNER_TEMP/pandora"
-            unzip -q "PANDORA 10.zip" -d "$RUNNER_TEMP/pandora"
+            unzip -q "$ARCHIVE" -d "$RUNNER_TEMP/pandora"
             SRC="$RUNNER_TEMP/pandora/PANDORA 10"
             test -f "$SRC/app/build.gradle"
             cp -a "$SRC/app" "$SRC/tests" .
