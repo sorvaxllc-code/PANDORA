@@ -35,7 +35,9 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         PandoraAccessibilityService svc=instance;
         if(svc==null) { callback.accept(""); return; }
         AccessibilityNodeInfo current=svc.getRootInActiveWindow();
-        if(current==null || "com.android.systemui".equals(String.valueOf(current.getPackageName()))) {
+        if(current==null ||
+                !ScreenSourcePolicy.canRead(String.valueOf(current.getPackageName()),
+                    containsPasswordInput(current))) {
             callback.accept(""); return;
         }
         String accessible=readVisibleText();
@@ -46,7 +48,8 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         PandoraAccessibilityService svc = instance;
         if (svc == null) return "";
         AccessibilityNodeInfo root = svc.getRootInActiveWindow();
-        if (root == null) return "";
+        if (root == null || !ScreenSourcePolicy.canRead(
+                String.valueOf(root.getPackageName()), containsPasswordInput(root))) return "";
         try {
             StringBuilder text = new StringBuilder();
             CharSequence pkg = root.getPackageName();
@@ -69,6 +72,21 @@ public final class PandoraAccessibilityService extends AccessibilityService {
             }
             return text.length() > 4500 ? text.substring(0,4500) : text.toString();
         } finally { /* Android manages accessibility node lifecycle on modern devices. */ }
+    }
+
+    private static boolean containsPasswordInput(AccessibilityNodeInfo root) {
+        ArrayDeque<AccessibilityNodeInfo> q=new ArrayDeque<>();
+        q.add(root);
+        int visited=0;
+        while(!q.isEmpty() && visited++<350) {
+            AccessibilityNodeInfo node=q.removeFirst();
+            if(node.isVisibleToUser() && node.isPassword())return true;
+            for(int i=0;i<node.getChildCount();i++){
+                AccessibilityNodeInfo child=node.getChild(i);
+                if(child!=null)q.add(child);
+            }
+        }
+        return false;
     }
 
     private static void append(StringBuilder text, HashSet<String> seen, CharSequence value) {
