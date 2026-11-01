@@ -24,3 +24,5 @@ jobs:
         run: bash tests/RUN_TESTS.sh
       - name: Compile app code without releasing an APK
         run: gradle --no-daemon :app:compileDebugJavaWithJavac
+      - name: Android lint (no installable APK)
+        run: gradle --no-daemon :app:lintDebug
