@@ -10,6 +10,7 @@ android {
         targetSdk 35
         versionCode 10
         versionName '1.0.0'
+        manifestPlaceholders = [pandoraAppName: 'PANDORA']
     }
 
     compileOptions {
@@ -31,6 +32,10 @@ android {
         }
     }
     buildTypes {
+        debug {
+            applicationIdSuffix '.preview'
+            manifestPlaceholders = [pandoraAppName: 'PANDORA TEST']
+        }
         release {
             minifyEnabled false
             if (System.getenv('PANDORA_KEYSTORE_PATH')) {

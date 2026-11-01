@@ -10,7 +10,7 @@
     </queries>
     <application
         android:allowBackup="false"
-        android:label="PANDORA"
+        android:label="${pandoraAppName}"
         android:theme="@style/JarvisTheme"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
