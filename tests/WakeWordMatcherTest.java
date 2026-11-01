@@ -5,7 +5,7 @@ public class WakeWordMatcherTest {
   }
   public static void main(String[] args) {
     expect(WakeWordMatcher.matches("Hey Pandora, beni duyuyor musun?"),true,"hey phrase");
-    expect(WakeWordMatcher.matches("Pandora!"),true,"pandora");
+    expect(WakeWordMatcher.matches("Pandora!"),false,"pandora");
     expect(WakeWordMatcher.matches("  HEY   PANDORA   "),true,"whitespace");
     expect(WakeWordMatcher.matches("Pandoranın kitabı"),false,"prefix guard");
     expect(WakeWordMatcher.matches("Merhaba Pandora"),false,"non-leading");

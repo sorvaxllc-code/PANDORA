@@ -1,7 +1,7 @@
 name: PANDORA Integration Checks
 on:
   push:
-    branches: [main]
+    branches: [main, codex/pandora-17]
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.1'
+      - name: Prepare offline Turkish voice model
+        run: python3 scripts/prepare_voice_model.py
       - name: Pure Java tests
         run: bash tests/RUN_TESTS.sh
       - name: Compile app code without releasing an APK

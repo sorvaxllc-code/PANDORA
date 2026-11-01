@@ -7,7 +7,6 @@ public final class WakeWordMatcher {
         if (utterance == null) return false;
         String value = utterance.toLowerCase(new Locale("tr", "TR"))
             .replaceAll("[.,!?;:]+", " ").replaceAll("\\s+", " ").trim();
-        return value.equals("pandora") || value.equals("hey pandora") ||
-            value.startsWith("pandora ") || value.startsWith("hey pandora ");
+        return value.equals("hey pandora") || value.startsWith("hey pandora ");
     }
 }
