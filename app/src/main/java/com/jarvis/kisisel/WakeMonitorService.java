@@ -127,7 +127,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         offline=new OfflineVoice(this,new OfflineVoice.Listener(){
             public void partial(String phrase){
                 if(stopped||speaking||processingAction)return;
-                if(!wakeShown && WakeWordMatcher.matches(phrase)){wakeShown=true;OverlayPulse.show(WakeMonitorService.this);}
+                if(WakeWordMatcher.matches(phrase)){wakeShown=true;OverlayPulse.show(WakeMonitorService.this);}
             }
             public void result(String phrase){
                 if(stopped||speaking||processingAction)return;
