@@ -188,45 +188,43 @@ public final class WakeMonitorService extends Service implements RecognitionList
             listening=false;
         }
         OverlayPulse.show(this);
-        if(ACTION_VIDEO.equals(action)) {
-            String msg=PandoraAccessibilityService.requestWhatsAppVideoSwitch();
-            PandoraAlerts.postImportant(this,"PANDORA · WhatsApp",msg);
-            processingAction=false;
-            if(!speakDirectResponse(msg))restart(900);
-        } else if(ACTION_SCREEN.equals(action)) {
-            if(!analyzeForegroundScreen()) {
-                processingAction=false;
-                restart(900);
+        // Tapping a notification can leave Android's notification shade on top of X.
+        // Dismiss only the shade when it is actually visible; do not leave the app.
+        boolean shadeDismissed=PandoraAccessibilityService.dismissNotificationShadeIfVisible();
+        handler.postDelayed(() -> {
+            if(stopped) return;
+            if(ACTION_VIDEO.equals(action)) {
+                String msg=PandoraAccessibilityService.requestWhatsAppVideoSwitch();
+                finishScreenAction("PANDORA · WhatsApp",msg);
+            } else if(ACTION_SCREEN.equals(action)) {
+                analyzeForegroundScreen();
             }
-        }
+        }, shadeDismissed ? 650 : 150);
     }
     private boolean analyzeForegroundScreen() {
         if(!PandoraAccessibilityService.isConnected()) {
-            String msg="Ekranı analiz etmem için PANDORA içinden Ekran erişimi ayarını açıp Android Erişilebilirlik iznini etkinleştirmelisin.";
-            PandoraAlerts.postImportant(this,"PANDORA · Ekran erişimi",msg);
-            return speakDirectResponse(msg);
+            return finishScreenAction("PANDORA · Ekran erişimi",
+                "Ekranı analiz etmem için PANDORA içinden Ekran erişimi ayarını açıp Android Erişilebilirlik iznini etkinleştirmelisin.");
         }
         String text=PandoraAccessibilityService.readVisibleText();
         if(text.trim().length()<60) {
-            String msg="Bu ekrandan yeterli metin okuyamadım. İçeriği PANDORA ile paylaşmayı deneyebilirsin.";
-            PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi",msg);
-            return speakDirectResponse(msg);
+            return finishScreenAction("PANDORA · Ekran analizi",
+                "Bu ekrandan yeterli metin okuyamadım. İçeriği PANDORA ile paylaşmayı deneyebilirsin.");
         }
         final MemoryDb db=new MemoryDb(this);
         final ModelRouter router=new ModelRouter(this,db);
         if("OFF".equals(router.mode())) {
             db.close();
-            String msg="Ekrandaki metni görebiliyorum ama analiz için PANDORA'da yerel veya izin verdiğin bulut yapay zekâ modunu açmalısın.";
-            PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi",msg);
-            return speakDirectResponse(msg);
+            return finishScreenAction("PANDORA · Ekran analizi",
+                "Ekrandaki metni görebiliyorum ama analiz için PANDORA'da yerel veya izin verdiğin bulut yapay zekâ modunu açmalısın.");
         }
         if (!ScreenCloudPolicy.allowed(router.mode(),
             getSharedPreferences("jarvis_settings",MODE_PRIVATE).getBoolean("pandora_screen_cloud_optin",false))) {
             db.close();
-            String msg="Ekran metnini bulutla analiz etmek için PANDORA Ayarlar bölümünde ekran bulut iznini ayrıca açmalısın.";
-            PandoraAlerts.postImportant(this,"PANDORA · Ekran gizliliği",msg);
-            return speakDirectResponse(msg);
+            return finishScreenAction("PANDORA · Ekran gizliliği",
+                "Ekran metnini bulutla analiz etmek için PANDORA Ayarlar bölümünde ekran bulut iznini ayrıca açmalısın.");
         }
+        processingAction=true;
         PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi","Gördüğüm metni analiz ediyorum. Sonuç bildirimde görünecek.");
         String prompt="Aşağıdaki Android ekranından erişilebilen METNİ Türkçe özetle ve kullanıcının gördüğü haberin anlamını açıkla. "
             +"İddiaları bağımsız doğrulamadan doğrulandı deme. Ekranda olmayanı gördüğünü iddia etme. "
@@ -236,11 +234,15 @@ public final class WakeMonitorService extends Service implements RecognitionList
             db.close();
             if(stopped) return;
             String output=answer==null?"Ekran analizi başarısız oldu.":answer;
-            PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi",output);
-            processingAction=false;
-            if(!speakDirectResponse(output))restart(1500);
+            finishScreenAction("PANDORA · Ekran analizi",output);
         }));
         return true; // Wait for model response before restarting recognition.
+    }
+    private boolean finishScreenAction(String title,String message) {
+        processingAction=false;
+        PandoraAlerts.postImportant(this,title,message);
+        if(!speakDirectResponse(message))restart(900);
+        return true;
     }
     private boolean speakDirectResponse(String response) {
         SharedPreferences settings = getSharedPreferences("jarvis_settings", MODE_PRIVATE);

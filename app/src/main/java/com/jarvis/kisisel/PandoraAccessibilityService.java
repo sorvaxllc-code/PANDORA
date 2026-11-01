@@ -1,6 +1,7 @@
 package com.jarvis.kisisel;
 
 import android.accessibilityservice.AccessibilityService;
+import android.os.Build;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.ArrayDeque;
@@ -16,6 +17,17 @@ public final class PandoraAccessibilityService extends AccessibilityService {
     private static volatile PandoraAccessibilityService instance;
 
     public static boolean isConnected() { return instance != null; }
+
+    /** Only a user-initiated notification action may dismiss the open notification panel. */
+    public static boolean dismissNotificationShadeIfVisible() {
+        PandoraAccessibilityService svc=instance;
+        if(svc==null || Build.VERSION.SDK_INT<31) return false;
+        AccessibilityNodeInfo root=svc.getRootInActiveWindow();
+        if(root==null) return false;
+        if(!"com.android.systemui".contentEquals(String.valueOf(root.getPackageName())))
+            return false;
+        return svc.performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE);
+    }
 
     public static String readVisibleText() {
         PandoraAccessibilityService svc = instance;
