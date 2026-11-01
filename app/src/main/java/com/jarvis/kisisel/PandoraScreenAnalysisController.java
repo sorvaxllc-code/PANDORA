@@ -77,12 +77,19 @@ public final class PandoraScreenAnalysisController {
             }
             return;
         }
-        PandoraAccessibilityService.readVisibleTextWithOcr(
-            extracted -> MAIN.post(() -> analyze(app,ticket,extracted)));
+        final String requestedPackage=pkg;
+        PandoraAccessibilityService.readVisibleTextWithOcr(requestedPackage,
+            extracted -> MAIN.post(() -> analyze(app,ticket,requestedPackage,extracted)));
     }
 
-    private static void analyze(Context app,int ticket,String text) {
+    private static void analyze(Context app,int ticket,String requestedPackage,String text) {
         if(!busy||ticket!=serial)return;
+        // Do not submit a stale capture if another app became foreground during OCR.
+        if(!ScreenCapturePolicy.canUse(requestedPackage,
+                PandoraAccessibilityService.foregroundPackage(),false)) {
+            finish(app,ticket,"Uygulama ekranı analiz sırasında değişti; güvenlik için işlem iptal edildi.");
+            return;
+        }
         if(text==null||text.trim().length()<60) {
             finish(app,ticket,"Ekranda okunabilir içerik bulunamadı veya Android bu ekranı koruyor.");
             return;

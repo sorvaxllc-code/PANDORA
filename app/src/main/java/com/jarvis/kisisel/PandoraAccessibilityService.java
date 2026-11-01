@@ -39,18 +39,28 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         return svc.performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE);
     }
 
-    /** Captures OCR only when explicitly asked; automatically falls back to accessible text. */
-    public static void readVisibleTextWithOcr(Consumer<String> callback) {
+    /** On-demand OCR restricted to the app that was foreground when the request started. */
+    public static void readVisibleTextWithOcr(String expectedPackage, Consumer<String> callback) {
         PandoraAccessibilityService svc=instance;
         if(svc==null) { callback.accept(""); return; }
         AccessibilityNodeInfo current=svc.getRootInActiveWindow();
-        if(current==null ||
-                !ScreenSourcePolicy.canRead(String.valueOf(current.getPackageName()),
-                    containsPasswordInput(current))) {
+        if(current==null || !ScreenCapturePolicy.canUse(expectedPackage,
+                String.valueOf(current.getPackageName()),containsPasswordInput(current))) {
             callback.accept(""); return;
         }
         String accessible=readVisibleText();
-        PandoraScreenReader.read(svc,accessible,callback);
+        // Screenshot + OCR can take seconds. An app change or a newly visible
+        // password form must invalidate the result before it reaches the AI.
+        PandoraScreenReader.read(svc,accessible,extracted -> {
+            PandoraAccessibilityService active=instance;
+            AccessibilityNodeInfo latest=active==null?null:active.getRootInActiveWindow();
+            if(active!=svc || latest==null || !ScreenCapturePolicy.canUse(expectedPackage,
+                    String.valueOf(latest.getPackageName()),containsPasswordInput(latest))) {
+                callback.accept("");
+            } else {
+                callback.accept(extracted);
+            }
+        });
     }
 
     public static String readVisibleText() {
