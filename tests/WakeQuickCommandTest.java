@@ -11,6 +11,9 @@ public class WakeQuickCommandTest {
         check("Hey Pandora, bugün hangi gün?",WakeQuickCommand.Kind.DATE);
         check("Hey Pandora, şarjım kaç?",WakeQuickCommand.Kind.BATTERY);
         check("Hey Pandora",WakeQuickCommand.Kind.WAKE_ONLY);
+        check("Hey Pandora şu ekrana bak",WakeQuickCommand.Kind.SCREEN_ANALYZE);
+        check("Hey Pandora bu haber ne demek",WakeQuickCommand.Kind.SCREEN_ANALYZE);
+        check("Hey Pandora görüntülü görüşmeye geç",WakeQuickCommand.Kind.VIDEO_UPGRADE);
         check("Hey Pandora, Binance'de pozisyon aç",WakeQuickCommand.Kind.UNKNOWN);
         check("Pandora, WhatsApp görüşmesini kapat",WakeQuickCommand.Kind.UNKNOWN);
         if(WakeQuickCommand.parse("Merhaba Pandora")!=null)throw new AssertionError("Needs prefix");

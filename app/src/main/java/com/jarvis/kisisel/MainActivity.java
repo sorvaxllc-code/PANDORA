@@ -203,6 +203,7 @@ public class MainActivity extends Activity {
         quickButton(quickRow,"⇧ Not yedeği",()->shareNotesBackup());
         quickButton(quickRow,"◉ Hey Pandora",()->toggleWakeMonitor());
         quickButton(quickRow,"✦ Ekran ışığı",()->showOrAuthorizeOverlay());
+        quickButton(quickRow,"▣ Ekran erişimi",()->openScreenAccessibilitySettings());
         quickButton(quickRow,"◌ Uyarı testi",()->testImportantAlert());
         quickButton(quickRow,"◉ Yapay zekâ",()->chooseMode());
         quickButton(quickRow,"☁ Bulut bağla",()->editApiKey());
@@ -282,6 +283,22 @@ public class MainActivity extends Activity {
             q=command.toLowerCase(new Locale("tr","TR"));
         }
         if(skillRegistry.tryHandle(this,q,this::reply)) return;
+        if (q.contains("ekrana bak") || q.contains("ekranı analiz") ||
+            q.contains("bu haber ne demek") || q.contains("şu haber ne demek")) {
+            if(!PandoraAccessibilityService.isConnected()) {
+                reply("Ekran erişimi henüz açık değil. PANDORA > Ekran erişimi seçeneğinden izin verebilirsin.");
+            } else {
+                String screen=PandoraAccessibilityService.readVisibleText();
+                if(screen.length()<60)reply("Bu ekranda analiz edilebilir metin göremedim.");
+                else analyzeSharedText(screen);
+            }
+            return;
+        }
+        if(q.contains("görüntülü görüşmeye geç") || q.contains("görüntülü aramaya geç") ||
+            q.contains("görüntülü görüşmeyi başlat")) {
+            reply(PandoraAccessibilityService.requestWhatsAppVideoSwitch());
+            return;
+        }
         if(q.equals("yardım")||q.equals("yardim")||q.equals("komutlar")||q.equals("neler yapabilirsin")) {reply(help());return;}
         if(q.startsWith("not al ")||q.startsWith("not et ")||q.startsWith("hatırla ")) {
             String s=command;int index=s.indexOf(' ');int next=s.indexOf(' ',index+1);
@@ -641,6 +658,18 @@ public class MainActivity extends Activity {
         }));
     }
 
+    private void openScreenAccessibilitySettings() {
+        new AlertDialog.Builder(this)
+            .setTitle("PANDORA · Ekran erişimi")
+            .setMessage("İstersen Android Erişilebilirlik ayarlarında PANDORA'ya izin verebilirsin. "
+                +"Bu geniş bir izindir: PANDORA diğer uygulamalardaki erişilebilir ekran metnini görebilir "
+                +"ve belirli düğmelere dokunabilir. Kodumuz yalnızca açık komut verdiğinde ekranı okur. "
+                +"Bu izin WhatsApp/X tarafından bazı ekranlarda kısıtlanabilir. Dilediğinde kapatabilirsin.")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Android ayarları",(d,w)->launch(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
+            .show();
+    }
+
     private void showOrAuthorizeOverlay() {
         if (OverlayPulse.permitted(this)) {
             OverlayPulse.show(this);
@@ -667,7 +696,7 @@ public class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this).setTitle("Hey Pandora · Deneysel")
-            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Saat, tarih ve şarj sorularını algılarsa güvenli yanıt verir. Diğer komutlarda yalnızca bildirim gönderir. Başlatılsın mı?")
+            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Saat, tarih ve şarj sorularını algılar; ekran analizi ve WhatsApp düğme denemesi için ayrıca Android Erişilebilirlik izni gerekir. Başlatılsın mı?")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Başlat",(d,w)->{
                 if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)

@@ -2,7 +2,7 @@ package com.jarvis.kisisel;
 import java.util.Locale;
 /** Whitelisted, read-only hands-free commands. No account or device modification. */
 public final class WakeQuickCommand {
-    public enum Kind { WAKE_ONLY, TIME, DATE, BATTERY, UNKNOWN }
+    public enum Kind { WAKE_ONLY, TIME, DATE, BATTERY, SCREEN_ANALYZE, VIDEO_UPGRADE, UNKNOWN }
     public static final class Result {
         public final Kind kind;
         public Result(Kind kind) {this.kind=kind;}
@@ -20,6 +20,13 @@ public final class WakeQuickCommand {
            q.equals("tarih ne")||q.equals("tarihi söyle"))return new Result(Kind.DATE);
         if(q.equals("şarjım kaç")||q.equals("şarj yüzde kaç")||q.equals("pil yüzde kaç")||
            q.equals("pilim yüzde kaç")||q.equals("batarya yüzde kaç"))return new Result(Kind.BATTERY);
+        if(q.contains("ekrana bak")||q.contains("ekranı analiz")||q.contains("ekrandaki haber")||
+           q.contains("bu haber ne demek")||q.contains("şu haber ne demek")||
+           q.contains("şu yazıyı analiz")||q.contains("bu paylaşımı analiz"))
+            return new Result(Kind.SCREEN_ANALYZE);
+        if(q.contains("görüntülü görüşmeye geç")||q.contains("görüntülü aramaya geç")||
+           q.contains("görüntülü görüşmeyi başlat")||q.contains("görüntülü aramayı başlat"))
+            return new Result(Kind.VIDEO_UPGRADE);
         return new Result(Kind.UNKNOWN);
     }
 }
