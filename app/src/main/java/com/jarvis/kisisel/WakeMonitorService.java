@@ -47,7 +47,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         if (!stopped && speaking) {
             speaking = false;
             if (tts != null) tts.stop();
-            handler.removeCallbacks(headphoneGuard);
+            // The next headphone monitor tick sees speaking=false and exits.
             restart(800);
         }
     };
