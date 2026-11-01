@@ -19,3 +19,7 @@ java -cp /tmp/pandora-parser-test WakeWordMatcherTest
 # Wake words with limited read-only tasks.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeWordMatcher.java app/src/main/java/com/jarvis/kisisel/WakeQuickCommand.java tests/WakeQuickCommandTest.java
 java -cp /tmp/pandora-parser-test WakeQuickCommandTest
+
+# Direct wake-command replies are audible without headphones, unless user disables speech or is in a call.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeVoicePolicy.java tests/WakeVoicePolicyTest.java
+java -cp /tmp/pandora-parser-test WakeVoicePolicyTest

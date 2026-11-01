@@ -14,10 +14,13 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.media.AudioAttributes;
+import android.content.SharedPreferences;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -34,6 +37,14 @@ public final class WakeMonitorService extends Service implements RecognitionList
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
     private boolean ttsReady = false;
+    private boolean speaking = false;
+    private final Runnable speechTimeout = () -> {
+        if (!stopped && speaking) {
+            speaking = false;
+            if (tts != null) tts.stop();
+            restart(800);
+        }
+    };
     private boolean listening = false;
     private long lastTriggerMs = 0;
     private boolean stopped = false;
@@ -41,13 +52,21 @@ public final class WakeMonitorService extends Service implements RecognitionList
 
     @Override public void onCreate() {
         super.onCreate();
-        tts = new TextToSpeech(this, status -> {
-            if (status == TextToSpeech.SUCCESS && tts != null) {
-                int lang = tts.setLanguage(Locale.forLanguageTag("tr-TR"));
-                ttsReady = lang != TextToSpeech.LANG_NOT_SUPPORTED &&
-                    lang != TextToSpeech.LANG_MISSING_DATA;
-            }
-        });
+        tts = new TextToSpeech(this, status -> handler.post(() -> {
+            if (stopped || tts == null || status != TextToSpeech.SUCCESS) return;
+            int lang = tts.setLanguage(Locale.forLanguageTag("tr-TR"));
+            ttsReady = lang != TextToSpeech.LANG_NOT_SUPPORTED &&
+                lang != TextToSpeech.LANG_MISSING_DATA;
+            if (!ttsReady) return;
+            tts.setAudioAttributes(new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .setUsage(AudioAttributes.USAGE_ASSISTANT).build());
+            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override public void onStart(String utteranceId) {}
+                @Override public void onDone(String utteranceId) { onSpeechFinished(); }
+                @Override public void onError(String utteranceId) { onSpeechFinished(); }
+            });
+        }));
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
@@ -81,7 +100,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         return START_NOT_STICKY;
     }
     private void listenOnce() {
-        if (stopped || recognizer == null || listening) return;
+        if (stopped || recognizer == null || listening || speaking) return;
         try {
             Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -97,15 +116,15 @@ public final class WakeMonitorService extends Service implements RecognitionList
         handler.removeCallbacks(retry);
         handler.postDelayed(retry, delayMs);
     }
-    private void hear(Bundle results) {
-        if(results==null)return;
+    private boolean hear(Bundle results) {
+        if(results==null)return false;
         ArrayList<String> texts=results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        if(texts==null)return;
+        if(texts==null)return false;
         for(String phrase:texts) {
             WakeQuickCommand.Result result=WakeQuickCommand.parse(phrase);
             if(result==null)continue;
             long now=android.os.SystemClock.elapsedRealtime();
-            if(now-lastTriggerMs<12000)return;
+            if(now-lastTriggerMs<12000)return false;
             lastTriggerMs=now;
             String response;
             switch(result.kind) {
@@ -130,11 +149,34 @@ public final class WakeMonitorService extends Service implements RecognitionList
                     break;
             }
             PandoraAlerts.postImportant(this,"PANDORA · Sesli komut",response);
-            if(ttsReady && PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this)) {
-                tts.speak(response,TextToSpeech.QUEUE_FLUSH,null,"pandora-wake");
-            }
-            return;
+            // A direct, user-invoked command may speak through the phone speaker.
+            // Proactive alerts keep their separate headset-only policy.
+            return speakDirectResponse(response);
         }
+        return false;
+    }
+    private boolean speakDirectResponse(String response) {
+        SharedPreferences settings = getSharedPreferences("jarvis_settings", MODE_PRIVATE);
+        if (!WakeVoicePolicy.allowDirectSpeech(settings.getBoolean("voice", true),
+                PandoraAlerts.inCall(this)) || !ttsReady || tts == null) return false;
+        speaking = true;
+        int result = tts.speak(response, TextToSpeech.QUEUE_FLUSH, null, "pandora-wake");
+        if (result != TextToSpeech.SUCCESS) {
+            speaking = false;
+            return false;
+        }
+        handler.removeCallbacks(retry);
+        handler.removeCallbacks(speechTimeout);
+        handler.postDelayed(speechTimeout, 20000);
+        return true;
+    }
+    private void onSpeechFinished() {
+        handler.post(() -> {
+            if (stopped || !speaking) return;
+            speaking = false;
+            handler.removeCallbacks(speechTimeout);
+            restart(650);
+        });
     }
     @Override public void onReadyForSpeech(Bundle params) {}
     @Override public void onBeginningOfSpeech() {}
@@ -146,18 +188,20 @@ public final class WakeMonitorService extends Service implements RecognitionList
         if(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){
             stopSelf();return;
         }
+        if (speaking) return;
         // A busy recognizer or other app using the microphone can interrupt listening.
         restart((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                  error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) ? 5000 : 1500);
     }
     @Override public void onResults(Bundle results) {
-        hear(results); listening = false; restart(1900);
+        listening = false;
+        if (!hear(results)) restart(1900);
     }
     // Partial recognition is often just the wake word: wait for a final transcript.
     @Override public void onPartialResults(Bundle partialResults) { }
     @Override public void onEvent(int eventType, Bundle params) {}
     @Override public void onDestroy() {
-        stopped = true; running = false; listening = false;
+        stopped = true; running = false; listening = false; speaking = false;
         handler.removeCallbacksAndMessages(null);
         if (recognizer != null) { recognizer.cancel(); recognizer.destroy(); recognizer = null; }
         if (tts != null) { tts.stop(); tts.shutdown(); tts = null; }
