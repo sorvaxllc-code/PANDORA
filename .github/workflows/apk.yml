@@ -1,0 +1,58 @@
+name: PANDORA - Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'PANDORA 10.zip'
+      - '.github/workflows/apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kaynak kodu al
+        uses: actions/checkout@v4
+      - name: JDK 17 hazirla
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK hazirla
+        uses: android-actions/setup-android@v3
+      - name: Android platformu kur
+        run: sdkmanager 'platforms;android-35' 'build-tools;36.0.0'
+      - name: Gradle 9.6.1 hazirla
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+          cache-provider: basic
+      - name: PANDORA kaynak paketini cikar
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f "PANDORA 10.zip" ]]; then
+            echo '::error::Kaynak paketi bulunamadi: PANDORA 10.zip'
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/pandora"
+          unzip -q "PANDORA 10.zip" -d "$RUNNER_TEMP/pandora"
+          test -f "$RUNNER_TEMP/pandora/PANDORA 10/app/build.gradle"
+          mkdir -p "$GITHUB_WORKSPACE/project"
+          cp -a "$RUNNER_TEMP/pandora/PANDORA 10/." "$GITHUB_WORKSPACE/project/"
+      - name: Java mantik testlerini calistir
+        working-directory: project
+        run: bash tests/RUN_TESTS.sh
+      - name: Debug APK derle
+        working-directory: project
+        run: gradle --no-daemon :app:assembleDebug
+      - name: APK dosyasini kaydet
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA-APK
+          path: project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
