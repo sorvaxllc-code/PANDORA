@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService;
 import android.os.Build;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
+import java.util.List;
 import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.function.Consumer;
@@ -18,11 +20,37 @@ public final class PandoraAccessibilityService extends AccessibilityService {
 
     public static boolean isConnected() { return instance != null; }
 
-    /** Foreground app for determining whether Quick Settings has returned to the underlying app. */
+    /**
+     * Android may briefly report the notification shade or our finished Quick Tile
+     * trampoline as the active root. Retrieve the focused application window
+     * instead, but never read an app behind an active PANDORA window.
+     */
+    private AccessibilityNodeInfo currentAppRoot() {
+        AccessibilityNodeInfo direct=getRootInActiveWindow();
+        String directPackage=direct==null?null:String.valueOf(direct.getPackageName());
+        if(ScreenSourcePolicy.canRead(directPackage,false))return direct;
+        List<AccessibilityWindowInfo> windows=getWindows();
+        if(windows!=null) {
+            // Only a focused or active application window counts; a background
+            // app visible behind Quick Settings or PANDORA cannot be captured.
+            for(AccessibilityWindowInfo window:windows) {
+                if(window.getType()!=AccessibilityWindowInfo.TYPE_APPLICATION ||
+                        (!window.isActive() && !window.isFocused()))continue;
+                AccessibilityNodeInfo root=window.getRoot();
+                if(root==null)continue;
+                String pkg=String.valueOf(root.getPackageName());
+                if(pkg.startsWith("com.jarvis.kisisel"))return direct;
+                if(ScreenSourcePolicy.canRead(pkg,false))return root;
+            }
+        }
+        return direct;
+    }
+
+    /** Foreground package only; this method does not read screen contents. */
     public static String foregroundPackage() {
         PandoraAccessibilityService svc=instance;
         if(svc==null)return null;
-        AccessibilityNodeInfo root=svc.getRootInActiveWindow();
+        AccessibilityNodeInfo root=svc.currentAppRoot();
         if(root==null)return null;
         CharSequence name=root.getPackageName();
         return name==null?null:name.toString();
@@ -43,7 +71,7 @@ public final class PandoraAccessibilityService extends AccessibilityService {
     public static void readVisibleTextWithOcr(String expectedPackage, Consumer<String> callback) {
         PandoraAccessibilityService svc=instance;
         if(svc==null) { callback.accept(""); return; }
-        AccessibilityNodeInfo current=svc.getRootInActiveWindow();
+        AccessibilityNodeInfo current=svc.currentAppRoot();
         if(current==null || !ScreenCapturePolicy.canUse(expectedPackage,
                 String.valueOf(current.getPackageName()),containsPasswordInput(current))) {
             callback.accept(""); return;
@@ -53,7 +81,7 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         // password form must invalidate the result before it reaches the AI.
         PandoraScreenReader.read(svc,accessible,extracted -> {
             PandoraAccessibilityService active=instance;
-            AccessibilityNodeInfo latest=active==null?null:active.getRootInActiveWindow();
+            AccessibilityNodeInfo latest=active==null?null:active.currentAppRoot();
             if(active!=svc || latest==null || !ScreenCapturePolicy.canUse(expectedPackage,
                     String.valueOf(latest.getPackageName()),containsPasswordInput(latest))) {
                 callback.accept("");
@@ -66,7 +94,7 @@ public final class PandoraAccessibilityService extends AccessibilityService {
     public static String readVisibleText() {
         PandoraAccessibilityService svc = instance;
         if (svc == null) return "";
-        AccessibilityNodeInfo root = svc.getRootInActiveWindow();
+        AccessibilityNodeInfo root = svc.currentAppRoot();
         if (root == null || !ScreenSourcePolicy.canRead(
                 String.valueOf(root.getPackageName()), containsPasswordInput(root))) return "";
         try {
@@ -118,7 +146,7 @@ public final class PandoraAccessibilityService extends AccessibilityService {
     public static String requestWhatsAppVideoSwitch() {
         PandoraAccessibilityService svc = instance;
         if(svc==null) return "Önce PANDORA ekran erişimi iznini açmalısın.";
-        AccessibilityNodeInfo root=svc.getRootInActiveWindow();
+        AccessibilityNodeInfo root=svc.currentAppRoot();
         if(root==null) return "Görüntülü görüşmeye geçmek için aktif uygulamanın ekranına erişemedim.";
         String pkg=String.valueOf(root.getPackageName());
         if(!WhatsAppCallPolicy.supportedPackage(pkg))
