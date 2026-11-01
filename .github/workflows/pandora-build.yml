@@ -65,6 +65,14 @@ jobs:
         env:
           PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
+      - name: Verify signed APK signature
+        if: env.PANDORA_SIGN_READY == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
       - name: Upload stable signed APK
         if: env.PANDORA_SIGN_READY == 'true'
         uses: actions/upload-artifact@v4
