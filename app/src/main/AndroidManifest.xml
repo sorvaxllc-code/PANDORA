@@ -34,6 +34,21 @@
             </intent-filter>
         </activity>
         <service android:name=".WakeMonitorService" android:exported="false" android:foregroundServiceType="microphone" />
+        <activity android:name=".PandoraQuickActionActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false"
+            android:noHistory="true"
+            android:excludeFromRecents="true" />
+        <service
+            android:name=".PandoraQuickTileService"
+            android:exported="true"
+            android:label="PANDORA · Ekrana Bak"
+            android:icon="@mipmap/ic_launcher"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <service
             android:name=".PandoraAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"

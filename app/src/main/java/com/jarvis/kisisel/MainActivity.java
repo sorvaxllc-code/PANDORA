@@ -109,7 +109,13 @@ public class MainActivity extends Activity {
         if(history.isEmpty()) addBubble(false, "Merhaba! Ben PANDORA. Sesli konuşmak için mikrofonu kullanabilir veya aşağıdaki komutlardan başlayabilirsin. Komutlar ücretsiz ve yerel çalışır.", false);
         else for (String[] m : history) addBubble("user".equals(m[0]), m[1], false);
         showStatus("HAZIR · " + modelRouter.modeLabel());
-        getWindow().getDecorView().post(() -> handleSharedText(getIntent()));
+        getWindow().getDecorView().post(() -> {
+            handleSharedText(getIntent());
+            if(getIntent()!=null && getIntent().getBooleanExtra("pandora_quick_tile_setup",false)) {
+                getIntent().removeExtra("pandora_quick_tile_setup");
+                showQuickTileSetup();
+            }
+        });
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -204,6 +210,7 @@ public class MainActivity extends Activity {
         quickButton(quickRow,"◉ Hey Pandora",()->toggleWakeMonitor());
         quickButton(quickRow,"✦ Ekran ışığı",()->showOrAuthorizeOverlay());
         quickButton(quickRow,"▣ Ekran erişimi",()->openScreenAccessibilitySettings());
+        quickButton(quickRow,"◈ Hızlı erişim",()->showQuickTileSetup());
         quickButton(quickRow,"◌ Uyarı testi",()->testImportantAlert());
         quickButton(quickRow,"◉ Yapay zekâ",()->chooseMode());
         quickButton(quickRow,"☁ Bulut bağla",()->editApiKey());
@@ -285,16 +292,9 @@ public class MainActivity extends Activity {
         if(skillRegistry.tryHandle(this,q,this::reply)) return;
         if (q.contains("ekrana bak") || q.contains("ekranı analiz") ||
             q.contains("bu haber ne demek") || q.contains("şu haber ne demek")) {
-            if(!PandoraAccessibilityService.isConnected()) {
-                reply("Ekran erişimi henüz açık değil. PANDORA > Ekran erişimi seçeneğinden izin verebilirsin.");
-            } else if (!ScreenCloudPolicy.allowed(modelRouter.mode(),prefs.getBoolean("pandora_screen_cloud_optin",false))
-                    && !"OFF".equals(modelRouter.mode())) {
-                reply("Ekran metnini bulutla analiz etmek için Ayarlar > Ekran metnini buluta gönder seçeneğinden ayrı onay vermelisin.");
-            } else {
-                String screen=PandoraAccessibilityService.readVisibleText();
-                if(screen.length()<60)reply("Bu ekranda analiz edilebilir metin göremedim.");
-                else analyzeSharedText(screen);
-            }
+            // Opening PANDORA foregrounds our UI and hides X/WhatsApp.
+            // Never claim the previous app was read from within PANDORA's own window.
+            showQuickTileSetup();
             return;
         }
         if(q.contains("görüntülü görüşmeye geç") || q.contains("görüntülü aramaya geç") ||
@@ -679,6 +679,20 @@ public class MainActivity extends Activity {
                 }
             }
         }));
+    }
+
+    private void showQuickTileSetup() {
+        new AlertDialog.Builder(this)
+            .setTitle("PANDORA · Başka uygulamadayken ekrana bak")
+            .setMessage("Android Hızlı Ayarlar panelini iki kez aşağı kaydırıp Düzenle'ye dokun. "
+                +"'PANDORA · Ekrana Bak' kutucuğunu panele ekle. "
+                +"Önce PANDORA'da 'Hey Pandora' hizmetini başlatmalı ve 'Ekran erişimi' iznini vermelisin. "
+                +"Sonra X gibi bir uygulamadayken hızlı panelden PANDORA kutucuğuna dokun. "
+                +"Kutucuk paneli kapatarak alttaki uygulamanın ekranını analiz etmeyi dener. "
+                +"Bütün Android sürümlerinde veya korumalı ekranlarda çalışması garanti değildir.")
+            .setNegativeButton("Kapat",null)
+            .setPositiveButton("Ekran erişimi ayarları",(d,w)->openScreenAccessibilitySettings())
+            .show();
     }
 
     private void openScreenAccessibilitySettings() {
