@@ -694,14 +694,14 @@ public class MainActivity extends Activity {
         boolean headset=PandoraAlerts.headsetConnected(this);
         String mode=modelRouter.mode();
         String report="Ekran erişimi: "+(screen?"AÇIK":"KAPALI")
-            +"\\nYapay zekâ modu: "+modelRouter.modeLabel()
+            +"\nYapay zekâ modu: "+modelRouter.modeLabel()
             +("OFF".equals(mode)?" (analiz yapılamaz)":" (bağlantı ayrıca test edilmeli)")
-            +"\\nSonuç bildirimleri: "+(notifications?"İZİNLİ":"İZİN GEREKİYOR")
-            +"\\nSiri benzeri ışık: "+(display?"İZİNLİ":"İZİN GEREKİYOR")
-            +"\\nMikrofon izni: "+(mic?"İZİNLİ":"İZİN GEREKİYOR")
-            +"\\nHey Pandora hizmeti: "+(WakeMonitorService.running?"AÇIK":"KAPALI")
-            +"\\nKulaklık: "+(headset?"BAĞLI":"BAĞLI DEĞİL")
-            +"\\n\\nBu ekran yalnızca izinleri ve seçili ayarları gösterir."
+            +"\nSonuç bildirimleri: "+(notifications?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\nSiri benzeri ışık: "+(display?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\nMikrofon izni: "+(mic?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\nHey Pandora hizmeti: "+(WakeMonitorService.running?"AÇIK":"KAPALI")
+            +"\nKulaklık: "+(headset?"BAĞLI":"BAĞLI DEĞİL")
+            +"\n\nBu ekran yalnızca izinleri ve seçili ayarları gösterir."
             +" Gerçek X ekranı, WhatsApp çağrısı ve model bağlantısının çalıştığını kanıtlamaz.";
         new AlertDialog.Builder(this)
             .setTitle("PANDORA · Sistem durumu")
