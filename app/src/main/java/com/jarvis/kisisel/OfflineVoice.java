@@ -1,37 +1,76 @@
 package com.jarvis.kisisel;
 import android.content.Context;
+import android.media.*;
+import android.os.*;
 import org.vosk.Model;
 import org.vosk.Recognizer;
-import org.vosk.android.SpeechService;
 import org.vosk.android.StorageService;
 import org.json.JSONObject;
-/** Local audio processing only. No Android SpeechRecognizer restart chimes or audio upload. */
+/** Local wake detector and Turkish command recognizer share one microphone, without chimes. */
 public final class OfflineVoice implements AutoCloseable {
     public interface Listener {void partial(String text);void result(String text);void error();}
-    private Model model;
-    private Recognizer recognizer;
-    private SpeechService speech;
-    private boolean closed,paused;
+    private final Handler main=new Handler(Looper.getMainLooper());
+    private final Listener listener;
+    private Model turkish,wakeModel;
+    private volatile boolean closed,paused,reset;
+    private volatile AudioRecord recorder;
+    private Thread worker;
     public OfflineVoice(Context context,Listener listener){
-        StorageService.unpack(context,"model-tr","pandora-model-tr",loaded->{
-            if(closed){loaded.close();return;}
-            model=loaded;
-            try{
-                recognizer=new Recognizer(model,16000f);
-                speech=new SpeechService(recognizer,16000f);
-                speech.startListening(new org.vosk.android.RecognitionListener(){
-                    public void onPartialResult(String json){if(!closed&&!paused)listener.partial(value(json,"partial"));}
-                    public void onResult(String json){if(!closed&&!paused)listener.result(value(json,"text"));}
-                    public void onFinalResult(String json){}
-                    public void onError(Exception e){if(!closed)listener.error();}
-                    public void onTimeout(){if(!closed)listener.error();}
-                });
-                speech.setPause(paused);
-            }catch(Exception e){listener.error();}
-        },error->{if(!closed)listener.error();});
+        this.listener=listener;
+        StorageService.unpack(context,"model-tr","pandora-model-tr",tr->{
+            if(closed){tr.close();return;}turkish=tr;
+            StorageService.unpack(context,"model-wake","pandora-model-wake",en->{
+                if(closed){en.close();return;}wakeModel=en;
+                worker=new Thread(this::run,"pandora-local-voice");worker.start();
+            },e->{if(!closed){close();listener.error();}});
+        },e->{if(!closed)listener.error();});
     }
     private static String value(String json,String key){try{return new JSONObject(json).optString(key,"");}catch(Exception e){return "";}}
-    public void pause(){paused=true;if(speech!=null)speech.setPause(true);}
-    public void resume(){if(closed)return;paused=false;if(speech!=null){speech.reset();speech.setPause(false);}}
-    public void close(){closed=true;if(speech!=null){speech.cancel();speech.shutdown();speech=null;}if(recognizer!=null){recognizer.close();recognizer=null;}if(model!=null){model.close();model=null;}}
+    @android.annotation.SuppressLint("MissingPermission")
+    private void run(){
+        Recognizer wake=null,command=null;AudioRecord audio=null;
+        try{
+            wake=new Recognizer(wakeModel,16000f,"[\"hey pandora\",\"[unk]\"]");
+            command=new Recognizer(turkish,16000f);
+            int minimum=AudioRecord.getMinBufferSize(16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);
+            audio=new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,16000,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,Math.max(6400,minimum));
+            recorder=audio;
+            if(audio.getState()!=AudioRecord.STATE_INITIALIZED)throw new IllegalStateException("Microphone unavailable");
+            audio.startRecording();short[] chunk=new short[1600];boolean activated=false;long deadline=0;
+            while(!closed){
+                int count=audio.read(chunk,0,chunk.length);
+                if(count<0){if(closed)break;throw new IllegalStateException("Audio capture failed");}
+                if(reset){reset=false;wake.reset();command.reset();activated=false;}
+                if(paused||count==0)continue;
+                if(!activated){
+                    boolean finalWake=wake.acceptWaveForm(chunk,count);
+                    String words=value(finalWake?wake.getResult():wake.getPartialResult(),finalWake?"text":"partial");
+                    if(WakeWordMatcher.matches(words)){
+                        activated=true;deadline=SystemClock.elapsedRealtime()+16000;command.reset();
+                        main.post(()->{if(!closed&&!paused)listener.partial("hey pandora");});
+                    }
+                }else{
+                    boolean ended=command.acceptWaveForm(chunk,count);
+                    if(ended || SystemClock.elapsedRealtime()>deadline){
+                        String text=value(ended?command.getResult():command.getFinalResult(),"text").trim();
+                        if(!text.isEmpty()){
+                            paused=true;activated=false;wake.reset();
+                            main.post(()->{if(!closed)listener.result("hey pandora "+text);});
+                        }else if(SystemClock.elapsedRealtime()>deadline){activated=false;wake.reset();}
+                    }
+                }
+            }
+        }catch(Exception e){if(!closed)main.post(()->{if(!closed)listener.error();});}
+        finally{
+            if(audio!=null){try{audio.stop();}catch(RuntimeException ignored){}audio.release();}recorder=null;
+            if(wake!=null)wake.close();if(command!=null)command.close();
+            if(wakeModel!=null){wakeModel.close();wakeModel=null;}if(turkish!=null){turkish.close();turkish=null;}
+        }
+    }
+    public void pause(){paused=true;}
+    public void resume(){if(closed)return;reset=true;paused=false;}
+    public void close(){
+        closed=true;AudioRecord audio=recorder;if(audio!=null)try{audio.stop();}catch(RuntimeException ignored){}
+        if(worker==null && turkish!=null){turkish.close();turkish=null;}
+    }
 }

@@ -21,6 +21,9 @@ public final class MemoryCommandParserTest {
         expect("Mısır tarihini araştır", null);
         expect("HAFIZANA NOT ET: buluşma", "buluşma");
         expect("Pandora, şu bilgiyi hafızana kaydet: ilk satır\nikinci satır", "ilk satır ikinci satır");
+        expect("Hey Pandora not al: yarın toplantı var", "yarın toplantı var");
+        expect("yarın toplantı var not al", "yarın toplantı var");
+        expect("not alma", null);
         System.out.println("BAŞARILI: "+passed+" hafıza komutu testi");
     }
 }

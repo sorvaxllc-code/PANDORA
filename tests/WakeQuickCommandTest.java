@@ -6,7 +6,8 @@ public class WakeQuickCommandTest {
     }
     public static void main(String[] args) {
         check("Hey Pandora, saat kaç?",WakeQuickCommand.Kind.TIME);
-        check("PANDORA! şu an saat kaç",WakeQuickCommand.Kind.TIME);
+        check("HEY PANDORA! şu an saat kaç",WakeQuickCommand.Kind.TIME);
+        if(WakeQuickCommand.parse("Pandora saat kaç")!=null)throw new AssertionError("Explicit Hey required");
         check("Hey Pandora, bugün ayın kaçı?",WakeQuickCommand.Kind.DATE);
         check("Hey Pandora, bugün hangi gün?",WakeQuickCommand.Kind.DATE);
         check("Hey Pandora, şarjım kaç?",WakeQuickCommand.Kind.BATTERY);

@@ -11,3 +11,4 @@ local.properties
 *.p12
 
 app/src/main/assets/model-tr/
+app/src/main/assets/model-wake/

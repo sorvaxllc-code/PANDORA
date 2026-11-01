@@ -135,6 +135,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
                 result.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,texts);
                 boolean handled=hear(result);wakeShown=false;
                 if(handled && offline!=null)offline.pause();
+                if(!speaking&&!processingAction)restart(700);
             }
             public void error(){
                 recordAnswer("Yerel ses dinlemesi başlatılamadı veya kesildi. Mikrofon başka bir uygulama tarafından kullanılıyor olabilir. PANDORA içinden yeniden başlatabilirsin.");
