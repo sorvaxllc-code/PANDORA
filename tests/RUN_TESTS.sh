@@ -11,3 +11,7 @@ java -cp /tmp/pandora-parser-test FreeCloudPolicyTest
 # Standalone greeting classifier is tested outside Android.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/ConversationIntent.java tests/ConversationIntentTest.java
 java -cp /tmp/pandora-parser-test ConversationIntentTest
+
+# Wake word recognition classifier
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeWordMatcher.java tests/WakeWordMatcherTest.java
+java -cp /tmp/pandora-parser-test WakeWordMatcherTest

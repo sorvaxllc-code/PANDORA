@@ -19,3 +19,8 @@ Bu proje **kurulabilir APK degil, kaynak kod paketidir.** GitHub baglantisi ve i
 **APK'yi sessizce veya uzaktan telefona kurma:** Android kullanici onayi gerektirir. Bu surumde uygulama ici otomatik guncelleme denetimi henuz yok; buradaki ilk kilometre tasi bulutta otomatik APK **olusturma** altyapisidir.
 
 Bu ortamda Android SDK olmadigindan workflow gercek GitHub runner uzerinde henuz calistirilamadi. GitHub baglandiktan sonra basarisiz derleme varsa loga gore duzeltilir.
+
+
+## PANDORA 11 – deneysel Hey Pandora ve uyarı testi
+
+Uygulama menüsündeki **Hey Pandora** düğmesi açık rızayla mikrofon ön plan hizmeti başlatır. Dinleme kalıcı sistem bildiriminden durdurulabilir. Bu bir kesintisiz hotword motoru değildir; sistem SpeechRecognizer çevrimdışı tercihine rağmen bulut kullanabilir ve başka uygulamalarda/çağrılarda kesilebilir. Algılanan uyandırma sözcüğü yalnızca bildirim gönderir; henüz serbest komut icra etmez. **Uyarı testi** bildirimi ve kulaklık bağlıysa (çağrı dışındayken) TTS sesli uyarısını dener. Otomatik Binance takibi henüz yoktur. PANDORA TEST sürümü eski kurulumdan ayrı veriler tutar. Kalıcı release APK imzası henüz kurulmamıştır.

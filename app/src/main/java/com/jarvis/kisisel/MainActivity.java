@@ -60,6 +60,7 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     private static final int VOICE_REQUEST = 40;
     private static final int NOTIF_REQUEST = 41;
+    private static final int WAKE_AUDIO_REQUEST = 42;
     private static final int BG = 0xFF070707;
     private static final int CARD = 0xFF1B1B1B;
     private static final int CYAN = 0xFFF1F1F1;
@@ -134,13 +135,15 @@ public class MainActivity extends Activity {
         orb=new OrbView(this); LinearLayout.LayoutParams orbParams=lp(-1,dp(172)); orbParams.topMargin=dp(3);
         page.addView(orb,orbParams);
         status=text("",12,CYAN,true);status.setGravity(Gravity.CENTER);status.setLetterSpacing(.13f);page.addView(status);
-        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ · 1.0",11,MUTED,false);subtitle.setGravity(Gravity.CENTER);
+        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ · 1.1",11,MUTED,false);subtitle.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subparams=lp(-1,dp(32));page.addView(subtitle,subparams);
         HorizontalScrollView quickScroll=new HorizontalScrollView(this);quickScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout quickRow=new LinearLayout(this);quickRow.setOrientation(LinearLayout.HORIZONTAL);
         quickButton(quickRow,"＋ Not al",()->promptNote());
         quickButton(quickRow,"▤ Notlar",()->showNotes());
         quickButton(quickRow,"⇧ Not yedeği",()->shareNotesBackup());
+        quickButton(quickRow,"◉ Hey Pandora",()->toggleWakeMonitor());
+        quickButton(quickRow,"◌ Uyarı testi",()->testImportantAlert());
         quickButton(quickRow,"◉ Yapay zekâ",()->chooseMode());
         quickButton(quickRow,"☁ Bulut bağla",()->editApiKey());
         quickButton(quickRow,"☁ Bulut testi",()->checkCloudKey());
@@ -577,6 +580,56 @@ public class MainActivity extends Activity {
             }
         }));
     }
+
+    private void toggleWakeMonitor() {
+        if(WakeMonitorService.running) {
+            stopService(new Intent(this,WakeMonitorService.class));
+            Toast.makeText(this,"Dinleme durduruldu",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Hey Pandora · Deneysel")
+            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Hey Pandora duyulunca bildirim gönderilir. Başlatılsın mı?")
+            .setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Başlat",(d,w)->{
+                if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_AUDIO_REQUEST);
+                else startWakeMonitor();
+            }).show();
+    }
+    private void startWakeMonitor() {
+        try {
+            startForegroundService(new Intent(this,WakeMonitorService.class).setAction(WakeMonitorService.ACTION_START));
+            Toast.makeText(this,"Deneysel dinleme açılıyor",Toast.LENGTH_LONG).show();
+        } catch(RuntimeException e) {
+            new AlertDialog.Builder(this).setTitle("Dinleme açılamadı")
+              .setMessage("Android mikrofon hizmetini başlatmayı engelledi. PANDORA ekrandayken tekrar deneyebilirsin.")
+              .setPositiveButton("Tamam",null).show();
+        }
+    }
+    private void testImportantAlert() {
+        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIF_REQUEST);
+            Toast.makeText(this,"İzin verdikten sonra Uyarı testi'ne tekrar bas.",Toast.LENGTH_LONG).show();
+            return;
+        }
+        boolean ok=PandoraAlerts.postImportant(this,"PANDORA · Uyarı testi","Bu, PANDORA'nın önemli olay bildirimidir.");
+        boolean headphones=PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this) && ttsReady;
+        if(ok && headphones)
+            speech.speak("Mehmet, Pandora bildirim testi başarılı.",TextToSpeech.QUEUE_FLUSH,null,"pandora-test");
+        new AlertDialog.Builder(this).setTitle("PANDORA · Bildirim testi")
+            .setMessage((ok?"Bildirim gönderildi.":"Bildirim izni yok veya işlem başarısız.")+
+                "\nKulaklıktan sesli okuma: "+(headphones&&ok?"denendi":"çalıştırılmadı")+
+                "\nGörüşme sırasında konuşmanı kesmek için sesli uyarı vermiyoruz.")
+            .setPositiveButton("Tamam",null).show();
+    }
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode==WAKE_AUDIO_REQUEST) {
+            if(grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED)startWakeMonitor();
+            else Toast.makeText(this,"Mikrofon izni verilmedi.",Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void listen() {
         Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
