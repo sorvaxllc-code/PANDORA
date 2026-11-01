@@ -47,7 +47,24 @@ public final class WakeMonitorService extends Service implements RecognitionList
         if (!stopped && speaking) {
             speaking = false;
             if (tts != null) tts.stop();
+            handler.removeCallbacks(headphoneGuard);
             restart(800);
+        }
+    };
+    // Speech must stop if Bluetooth/wired headphones disconnect mid-reply.
+    // Android may otherwise automatically reroute audio to the phone speaker.
+    private final Runnable headphoneGuard = new Runnable() {
+        @Override public void run() {
+            if(stopped || !speaking)return;
+            if(!PandoraAlerts.headsetConnected(WakeMonitorService.this)
+                || PandoraAlerts.inCall(WakeMonitorService.this)) {
+                speaking=false;
+                if(tts!=null)tts.stop();
+                handler.removeCallbacks(speechTimeout);
+                restart(700);
+                return;
+            }
+            handler.postDelayed(this,250);
         }
     };
     private boolean listening = false;
@@ -285,6 +302,8 @@ public final class WakeMonitorService extends Service implements RecognitionList
         }
         handler.removeCallbacks(retry);
         handler.removeCallbacks(speechTimeout);
+        handler.removeCallbacks(headphoneGuard);
+        handler.postDelayed(headphoneGuard,250);
         handler.postDelayed(speechTimeout, 20000);
         return true;
     }
@@ -293,6 +312,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
             if (stopped || !speaking) return;
             speaking = false;
             handler.removeCallbacks(speechTimeout);
+            handler.removeCallbacks(headphoneGuard);
             restart(650);
         });
     }

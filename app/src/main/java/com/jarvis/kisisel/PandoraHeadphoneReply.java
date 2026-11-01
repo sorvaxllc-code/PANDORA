@@ -30,17 +30,42 @@ public final class PandoraHeadphoneReply {
                 .setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build());
+            final boolean[] ended={false};
+            final Runnable[] watch={null};
+            final Runnable close=() -> {
+                if(ended[0])return;
+                ended[0]=true;
+                if(watch[0]!=null)main.removeCallbacks(watch[0]);
+                tts.stop();
+                tts.shutdown();
+            };
+            watch[0]=new Runnable() {
+                @Override public void run() {
+                    if(ended[0])return;
+                    if(!PandoraAlerts.headsetConnected(app) || PandoraAlerts.inCall(app)
+                        || !app.getSharedPreferences("jarvis_settings",Context.MODE_PRIVATE)
+                                .getBoolean("voice",true)) {
+                        close.run();
+                    } else {
+                        main.postDelayed(this,250);
+                    }
+                }
+            };
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) {}
-                @Override public void onDone(String id) { main.post(tts::shutdown); }
-                @Override public void onError(String id) { main.post(tts::shutdown); }
+                @Override public void onDone(String id) { main.post(close); }
+                @Override public void onError(String id) { main.post(close); }
             });
             String spoken=response.length()>375
                 ?response.substring(0,365)+"... Devamı bildirimde."
                 :response;
-            if(tts.speak(spoken,TextToSpeech.QUEUE_FLUSH,null,"pandora-tile")!=TextToSpeech.SUCCESS)
-                tts.shutdown();
-            main.postDelayed(tts::shutdown,30000);
+            if(tts.speak(spoken,TextToSpeech.QUEUE_FLUSH,null,"pandora-tile")
+                    !=TextToSpeech.SUCCESS) {
+                close.run();
+                return;
+            }
+            main.postDelayed(watch[0],250);
+            main.postDelayed(close,30000);
         }));
     }
 }
