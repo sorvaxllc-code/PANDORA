@@ -7,6 +7,8 @@ on:
   # A signed build only when a batch version is deliberately advanced.
   push:
     branches: [main, codex/pandora-17]
+    paths:
+      - 'app/build.gradle'
 
 concurrency:
   group: pandora-stable-${{ github.ref }}
