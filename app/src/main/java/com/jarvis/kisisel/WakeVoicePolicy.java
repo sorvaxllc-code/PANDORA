@@ -1,10 +1,11 @@
 package com.jarvis.kisisel;
 
-/** Only for replies to explicitly spoken "Hey Pandora" commands.
- *  Unsolicited alerts still use their own headphones-only policy. */
+/** Direct wake-command responses speak only through connected headphones.
+ *  Without headphones, callers still receive a notification. */
 public final class WakeVoicePolicy {
     private WakeVoicePolicy() {}
-    public static boolean allowDirectSpeech(boolean voiceEnabled, boolean inCall) {
-        return voiceEnabled && !inCall;
+    public static boolean allowDirectSpeech(boolean voiceEnabled,
+                                            boolean headsetConnected, boolean inCall) {
+        return voiceEnabled && headsetConnected && !inCall;
     }
 }

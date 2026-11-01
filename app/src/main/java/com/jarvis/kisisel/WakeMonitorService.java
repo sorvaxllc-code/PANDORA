@@ -158,7 +158,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
     private boolean speakDirectResponse(String response) {
         SharedPreferences settings = getSharedPreferences("jarvis_settings", MODE_PRIVATE);
         if (!WakeVoicePolicy.allowDirectSpeech(settings.getBoolean("voice", true),
-                PandoraAlerts.inCall(this)) || !ttsReady || tts == null) return false;
+                PandoraAlerts.headsetConnected(this), PandoraAlerts.inCall(this)) || !ttsReady || tts == null) return false;
         speaking = true;
         int result = tts.speak(response, TextToSpeech.QUEUE_FLUSH, null, "pandora-wake");
         if (result != TextToSpeech.SUCCESS) {
