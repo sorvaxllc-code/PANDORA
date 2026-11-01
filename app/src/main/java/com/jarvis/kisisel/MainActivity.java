@@ -211,6 +211,7 @@ public class MainActivity extends Activity {
         quickButton(quickRow,"▤ Notlar",()->showNotes());
         quickButton(quickRow,"⇧ Not yedeği",()->shareNotesBackup());
         quickButton(quickRow,"◉ Hey Pandora",()->toggleWakeMonitor());
+        quickButton(quickRow,"✓ Sistem durumu",()->showSystemReadiness());
         quickButton(quickRow,"✦ Ekran ışığı",()->showOrAuthorizeOverlay());
         quickButton(quickRow,"▣ Ekran erişimi",()->openScreenAccessibilitySettings());
         quickButton(quickRow,"◈ Hızlı erişim",()->showQuickTileSetup());
@@ -682,6 +683,47 @@ public class MainActivity extends Activity {
                 }
             }
         }));
+    }
+
+    private void showSystemReadiness() {
+        boolean screen=PandoraAccessibilityService.isConnected();
+        boolean display=OverlayPulse.permitted(this);
+        boolean mic=checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+            ==PackageManager.PERMISSION_GRANTED;
+        boolean notifications=PandoraAlerts.canNotify(this);
+        boolean headset=PandoraAlerts.headsetConnected(this);
+        String mode=modelRouter.mode();
+        String report="Ekran erişimi: "+(screen?"AÇIK":"KAPALI")
+            +"\\nYapay zekâ modu: "+modelRouter.modeLabel()
+            +("OFF".equals(mode)?" (analiz yapılamaz)":" (bağlantı ayrıca test edilmeli)")
+            +"\\nSonuç bildirimleri: "+(notifications?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\\nSiri benzeri ışık: "+(display?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\\nMikrofon izni: "+(mic?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\\nHey Pandora hizmeti: "+(WakeMonitorService.running?"AÇIK":"KAPALI")
+            +"\\nKulaklık: "+(headset?"BAĞLI":"BAĞLI DEĞİL")
+            +"\\n\\nBu ekran yalnızca izinleri ve seçili ayarları gösterir."
+            +" Gerçek X ekranı, WhatsApp çağrısı ve model bağlantısının çalıştığını kanıtlamaz.";
+        new AlertDialog.Builder(this)
+            .setTitle("PANDORA · Sistem durumu")
+            .setMessage(report)
+            .setNegativeButton("Kapat",null)
+            .setNeutralButton("Hızlı erişim",(dialog,which)->showQuickTileSetup())
+            .setPositiveButton("Eksik ayarı aç",(dialog,which)->{
+                if(!screen) {
+                    openScreenAccessibilitySettings();
+                } else if("OFF".equals(mode)) {
+                    chooseMode();
+                } else if(!notifications && Build.VERSION.SDK_INT>=33) {
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIF_REQUEST);
+                } else if(!display) {
+                    showOrAuthorizeOverlay();
+                } else if(!mic) {
+                    toggleWakeMonitor();
+                } else {
+                    Toast.makeText(this,"Temel izinler açık. Model bağlantısını ayrıca test et.",
+                        Toast.LENGTH_LONG).show();
+                }
+            }).show();
     }
 
     private void showQuickTileSetup() {
