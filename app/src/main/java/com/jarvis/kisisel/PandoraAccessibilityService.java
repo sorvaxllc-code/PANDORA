@@ -6,7 +6,6 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.ArrayDeque;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
@@ -112,51 +111,71 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo root=svc.getRootInActiveWindow();
         if(root==null) return "Görüntülü görüşmeye geçmek için aktif uygulamanın ekranına erişemedim.";
         String pkg=String.valueOf(root.getPackageName());
-        if(!"com.whatsapp".equals(pkg) && !"com.whatsapp.w4b".equals(pkg))
+        if(!WhatsAppCallPolicy.supportedPackage(pkg))
             return "Görüntülü görüşme komutunu yalnızca WhatsApp çağrı ekranında deneyebilirim.";
-        if(!callControlsVisible(root)) return "Aktif sesli görüşmeyi doğrulayamadım; işlem yapmadım.";
+        CallControls controls = inspectCallControls(root);
+        if (controls.activeVideo)
+            return "WhatsApp'ta görüntülü görüşme zaten etkin görünüyor; işlem yapmadım.";
+        if(!WhatsAppCallPolicy.mayUpgrade(pkg,controls.endCall,controls.audioControl,controls.activeVideo))
+            return "Aktif sesli görüşmeyi güvenilir biçimde doğrulayamadım; işlem yapmadım.";
         AccessibilityNodeInfo video=locateVideoButton(root);
         if(video==null) return "WhatsApp'ın görüntülü görüşmeye geçiş düğmesini bulamadım.";
         AccessibilityNodeInfo clickable=video;
-        for(int i=0;i<3 && clickable!=null && !clickable.isClickable();i++)clickable=clickable.getParent();
-        if(clickable!=null && clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            return "WhatsApp'taki görüntülü görüşme düğmesine dokundum. Geçişin tamamlanması karşı tarafın onayını gerektirebilir.";
+        // One parent at most: never click a large, unrelated container.
+        if(!clickable.isClickable()) clickable=clickable.getParent();
+        if(clickable!=null && clickable.isVisibleToUser() && clickable.isEnabled()
+                && clickable.isClickable()
+                && clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            return "WhatsApp görüntülü görüşmeye geçiş düğmesine dokunma isteğini Android'e ilettim. İşlemin tamamlandığını doğrulamadım; karşı tarafın onayı gerekebilir.";
         return "WhatsApp görüntülü görüşmeye geçiş işlemini Android engelledi.";
     }
 
-    private static boolean callControlsVisible(AccessibilityNodeInfo root) {
-        ArrayDeque<AccessibilityNodeInfo> nodes=new ArrayDeque<>();nodes.add(root);
-        int count=0;boolean end=false,mute=false;
-        while(!nodes.isEmpty() && count++<230){
+    private static final class CallControls {
+        boolean endCall, audioControl, activeVideo;
+    }
+    private static CallControls inspectCallControls(AccessibilityNodeInfo root) {
+        CallControls result=new CallControls();
+        ArrayDeque<AccessibilityNodeInfo> nodes=new ArrayDeque<>();
+        nodes.add(root);
+        int count=0;
+        while(!nodes.isEmpty() && count++<300) {
             AccessibilityNodeInfo node=nodes.removeFirst();
             if(!node.isVisibleToUser() || node.isPassword())continue;
-            String label=(String.valueOf(node.getText())+" "+String.valueOf(node.getContentDescription()))
-                .toLowerCase(new Locale("tr","TR"));
-            if(label.contains("aramayı bitir") || label.contains("end call") ||
-                label.contains("hang up") || label.contains("arama sonlandır")) end=true;
-            if(label.contains("sessize al") || label.contains("mute") ||
-                label.contains("hoparlör") || label.contains("speaker")) mute=true;
-            for(int i=0;i<node.getChildCount();i++){
-                AccessibilityNodeInfo child=node.getChild(i);if(child!=null)nodes.add(child);
+            String label=String.valueOf(node.getContentDescription())+" "+String.valueOf(node.getText());
+            // Only interactive controls can prove a call is active.
+            if(node.isEnabled() && (node.isClickable() || node.getParent()!=null
+                    && node.getParent().isClickable())) {
+                if(WhatsAppCallPolicy.isEndCallControl(label))result.endCall=true;
+                if(WhatsAppCallPolicy.isAudioControl(label))result.audioControl=true;
+                if(WhatsAppCallPolicy.indicatesActiveVideo(label))result.activeVideo=true;
+            }
+            for(int i=0;i<node.getChildCount();i++) {
+                AccessibilityNodeInfo child=node.getChild(i);
+                if(child!=null)nodes.add(child);
             }
         }
-        return end && mute;
+        return result;
     }
 
     private static AccessibilityNodeInfo locateVideoButton(AccessibilityNodeInfo root) {
-        ArrayDeque<AccessibilityNodeInfo> nodes=new ArrayDeque<>();nodes.add(root);
+        ArrayDeque<AccessibilityNodeInfo> nodes=new ArrayDeque<>();
+        nodes.add(root);
         int count=0;
-        while(!nodes.isEmpty() && count++<230){
+        while(!nodes.isEmpty() && count++<300) {
             AccessibilityNodeInfo node=nodes.removeFirst();
-            if(!node.isVisibleToUser() || node.isPassword())continue;
-            String label=(String.valueOf(node.getText())+" "+String.valueOf(node.getContentDescription()))
-                .toLowerCase(new Locale("tr","TR"));
-            if(label.contains("görüntülü aramaya geç") ||
-                label.contains("görüntülü görüşmeye geç") ||
-                label.contains("switch to video") || label.contains("turn on video") ||
-                label.contains("görüntülü arama") || label.contains("video call")) return node;
-            for(int i=0;i<node.getChildCount();i++){
-                AccessibilityNodeInfo child=node.getChild(i);if(child!=null)nodes.add(child);
+            if(!node.isVisibleToUser() || node.isPassword() || !node.isEnabled())continue;
+            AccessibilityNodeInfo parent=node.getParent();
+            boolean isControl=node.isClickable() ||
+                (parent!=null && parent.isEnabled() && parent.isClickable());
+            // Use the accessibility label of the candidate button, not unrelated
+            // chat or decorative text containing "video call".
+            String description=String.valueOf(node.getContentDescription());
+            String label=description.equals("null") ? String.valueOf(node.getText()) : description;
+            if(WhatsAppCallPolicy.isUpgradeButton(label,isControl))
+                return node;
+            for(int i=0;i<node.getChildCount();i++) {
+                AccessibilityNodeInfo child=node.getChild(i);
+                if(child!=null)nodes.add(child);
             }
         }
         return null;

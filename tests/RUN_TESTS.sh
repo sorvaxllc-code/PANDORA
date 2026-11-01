@@ -47,3 +47,7 @@ java -cp /tmp/pandora-parser-test ModelIntentPolicyTest
 # Never capture password input screens, own app, or notification shade.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/ScreenSourcePolicy.java tests/ScreenSourcePolicyTest.java
 java -cp /tmp/pandora-parser-test ScreenSourcePolicyTest
+
+# WhatsApp: don't mistake chat text or an active video call for a safe switch button.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WhatsAppCallPolicy.java tests/WhatsAppCallPolicyTest.java
+java -cp /tmp/pandora-parser-test WhatsAppCallPolicyTest
