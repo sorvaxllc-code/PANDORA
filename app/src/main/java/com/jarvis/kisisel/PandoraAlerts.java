@@ -59,12 +59,20 @@ public final class PandoraAlerts {
         stop.setAction(WakeMonitorService.ACTION_STOP);
         PendingIntent stopIntent = PendingIntent.getService(context, 144, stop,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent screen = new Intent(context, WakeMonitorService.class).setAction(WakeMonitorService.ACTION_SCREEN);
+        PendingIntent screenIntent = PendingIntent.getService(context, 145, screen,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent video = new Intent(context, WakeMonitorService.class).setAction(WakeMonitorService.ACTION_VIDEO);
+        PendingIntent videoIntent = PendingIntent.getService(context, 146, video,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(context, MONITOR_CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle("PANDORA · Deneysel sesli uyandırma")
                 .setContentText("Mikrofon kullanılıyor · Durdurmak için dokun")
                 .setContentIntent(openApp(context))
-                .addAction(android.R.drawable.ic_media_pause, "Dinlemeyi durdur", stopIntent)
+                .addAction(android.R.drawable.ic_menu_view, "Ekrana bak", screenIntent)
+                .addAction(android.R.drawable.ic_menu_camera, "Görüntülüye geç", videoIntent)
+                .addAction(android.R.drawable.ic_media_pause, "Durdur", stopIntent)
                 .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).build();
     }

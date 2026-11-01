@@ -33,6 +33,8 @@ import java.util.Locale;
 public final class WakeMonitorService extends Service implements RecognitionListener {
     public static final String ACTION_START = "com.jarvis.kisisel.START_WAKE";
     public static final String ACTION_STOP = "com.jarvis.kisisel.STOP_WAKE";
+    public static final String ACTION_SCREEN = "com.jarvis.kisisel.ANALYZE_CURRENT_SCREEN";
+    public static final String ACTION_VIDEO = "com.jarvis.kisisel.UPGRADE_WHATSAPP_VIDEO";
     public static volatile boolean running = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SpeechRecognizer recognizer;
@@ -48,7 +50,8 @@ public final class WakeMonitorService extends Service implements RecognitionList
         }
     };
     private boolean listening = false;
-    private long lastTriggerMs = 0;
+    private final WakeConversationState conversation = new WakeConversationState();
+    private boolean processingAction = false;
     private final Runnable retry = this::listenOnce;
 
     @Override public void onCreate() {
@@ -72,6 +75,16 @@ public final class WakeMonitorService extends Service implements RecognitionList
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopSelf(); return START_NOT_STICKY;
+        }
+        if(intent != null && (ACTION_SCREEN.equals(intent.getAction()) ||
+                ACTION_VIDEO.equals(intent.getAction()))) {
+            if(running && !stopped) {
+                String action=intent.getAction();
+                handler.post(()->runNotificationAction(action));
+            } else {
+                PandoraAlerts.postImportant(this,"PANDORA","Önce PANDORA içinden Hey Pandora dinlemesini başlat.");
+            }
+            return START_NOT_STICKY;
         }
         if (running) return START_NOT_STICKY;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -101,7 +114,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         return START_NOT_STICKY;
     }
     private void listenOnce() {
-        if (stopped || recognizer == null || listening || speaking) return;
+        if (stopped || recognizer == null || listening || speaking || processingAction) return;
         try {
             Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -122,23 +135,21 @@ public final class WakeMonitorService extends Service implements RecognitionList
         ArrayList<String> texts=results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
         if(texts==null)return false;
         for(String phrase:texts) {
-            WakeQuickCommand.Result result=WakeQuickCommand.parse(phrase);
-            if(result==null)continue;
             long now=android.os.SystemClock.elapsedRealtime();
-            if(now-lastTriggerMs<12000)return false;
-            lastTriggerMs=now;
-            if (result.kind == WakeQuickCommand.Kind.SCREEN_ANALYZE) {
+            WakeQuickCommand.Kind kind=conversation.accept(phrase,now);
+            if(kind==null)continue;
+            if (kind == WakeQuickCommand.Kind.SCREEN_ANALYZE) {
                 OverlayPulse.show(this);
                 return analyzeForegroundScreen();
             }
-            if (result.kind == WakeQuickCommand.Kind.VIDEO_UPGRADE) {
+            if (kind == WakeQuickCommand.Kind.VIDEO_UPGRADE) {
                 OverlayPulse.show(this);
                 String message = PandoraAccessibilityService.requestWhatsAppVideoSwitch();
                 PandoraAlerts.postImportant(this,"PANDORA · WhatsApp",message);
                 return speakDirectResponse(message);
             }
             String response;
-            switch(result.kind) {
+            switch(kind) {
                 case TIME:
                     response="Şu an saat "+new SimpleDateFormat("HH:mm",new Locale("tr","TR")).format(new Date())+".";
                     break;
@@ -153,7 +164,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
                         "Telefonun şarjı yüzde "+Math.round(100.0f*level/scale)+".";
                     break;
                 case WAKE_ONLY:
-                    response="Seni duydum. Saat, tarih veya şarj sorabilirsin. Diğer komutlar için bildirime dokun.";
+                    response="Dinliyorum. Şimdi ne yapmamı istediğini söyle.";
                     break;
                 default:
                     response="Seni duydum. Bu isteği arka planda çalıştırmıyorum. Uygulamayı açarak devam et.";
@@ -165,6 +176,29 @@ public final class WakeMonitorService extends Service implements RecognitionList
             return speakDirectResponse(response);
         }
         return false;
+    }
+    private void runNotificationAction(String action) {
+        if(stopped || processingAction) return;
+        processingAction=true;
+        // The mic is often unavailable during WhatsApp calls. Notification shortcuts
+        // do not require speech recognition and still obey the accessibility permission.
+        handler.removeCallbacks(retry);
+        if(recognizer!=null && listening) {
+            try { recognizer.cancel(); } catch(RuntimeException ignored) {}
+            listening=false;
+        }
+        OverlayPulse.show(this);
+        if(ACTION_VIDEO.equals(action)) {
+            String msg=PandoraAccessibilityService.requestWhatsAppVideoSwitch();
+            PandoraAlerts.postImportant(this,"PANDORA · WhatsApp",msg);
+            processingAction=false;
+            if(!speakDirectResponse(msg))restart(900);
+        } else if(ACTION_SCREEN.equals(action)) {
+            if(!analyzeForegroundScreen()) {
+                processingAction=false;
+                restart(900);
+            }
+        }
     }
     private boolean analyzeForegroundScreen() {
         if(!PandoraAccessibilityService.isConnected()) {
@@ -203,6 +237,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
             if(stopped) return;
             String output=answer==null?"Ekran analizi başarısız oldu.":answer;
             PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi",output);
+            processingAction=false;
             if(!speakDirectResponse(output))restart(1500);
         }));
         return true; // Wait for model response before restarting recognition.
@@ -240,7 +275,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         if(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){
             stopSelf();return;
         }
-        if (speaking) return;
+        if (speaking || processingAction) return;
         // A busy recognizer or other app using the microphone can interrupt listening.
         restart((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                  error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) ? 5000 : 1500);
@@ -254,6 +289,8 @@ public final class WakeMonitorService extends Service implements RecognitionList
     @Override public void onEvent(int eventType, Bundle params) {}
     @Override public void onDestroy() {
         stopped = true; running = false; listening = false; speaking = false;
+        processingAction=false;
+        conversation.reset();
         handler.removeCallbacksAndMessages(null);
         if (recognizer != null) { recognizer.cancel(); recognizer.destroy(); recognizer = null; }
         if (tts != null) { tts.stop(); tts.shutdown(); tts = null; }
