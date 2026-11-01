@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pandora_screen_access_description">PANDORA yalnızca sen açıkça sesli komut verdiğinde ekrandaki erişilebilir metni okur veya WhatsApp çağrı ekranındaki görüntülü görüşme düğmesini arar. Arka planda ekran kaydetmez. İstediğin zaman Erişilebilirlik ayarlarından kapatabilirsin.</string>
+    <string name="pandora_screen_access_description">PANDORA yalnızca sen açıkça sesli komut verdiğinde ekrandaki erişilebilir metni okur veya ekran görüntüsünden cihaz üzerinde yazı tanır veya WhatsApp çağrı ekranındaki görüntülü görüşme düğmesini arar. Arka planda ekran kaydetmez. İstediğin zaman Erişilebilirlik ayarlarından kapatabilirsin.</string>
 </resources>

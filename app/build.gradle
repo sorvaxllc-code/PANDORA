@@ -47,3 +47,9 @@ android {
         }
     }
 }
+
+// Bundled OCR model: works on-device without a separate server/API key.
+// ML Kit OCR is distinct from the AI model used to summarize text.
+dependencies {
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+}

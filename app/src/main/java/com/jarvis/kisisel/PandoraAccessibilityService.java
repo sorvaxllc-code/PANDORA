@@ -7,6 +7,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 /**
  * Permission-granted, user-command-only Android screen access.
@@ -27,6 +28,18 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         if(!"com.android.systemui".contentEquals(String.valueOf(root.getPackageName())))
             return false;
         return svc.performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE);
+    }
+
+    /** Captures OCR only when explicitly asked; automatically falls back to accessible text. */
+    public static void readVisibleTextWithOcr(Consumer<String> callback) {
+        PandoraAccessibilityService svc=instance;
+        if(svc==null) { callback.accept(""); return; }
+        AccessibilityNodeInfo current=svc.getRootInActiveWindow();
+        if(current==null || "com.android.systemui".equals(String.valueOf(current.getPackageName()))) {
+            callback.accept(""); return;
+        }
+        String accessible=readVisibleText();
+        PandoraScreenReader.read(svc,accessible,callback);
     }
 
     public static String readVisibleText() {
