@@ -17,8 +17,8 @@ public final class WakeConversationState {
             followUpUntilMs=nowMs+16000;
             return kind;
         }
-        if(kind==WakeQuickCommand.Kind.UNKNOWN && !explicit)
-            return null; // A random nearby conversation is not a supported command.
+        // The follow-up may be an open-ended question; it is routed only to the
+        // informational AI model, never to a privileged device action.
         if(nowMs-lastActionMs<2000) return null;
         lastActionMs=nowMs;
         followUpUntilMs=0L;

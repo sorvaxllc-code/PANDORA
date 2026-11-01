@@ -22,6 +22,7 @@ public final class WakeQuickCommand {
            q.equals("pilim yüzde kaç")||q.equals("batarya yüzde kaç"))return new Result(Kind.BATTERY);
         if(q.contains("ekrana bak")||q.contains("ekranı analiz")||q.contains("ekrandaki haber")||
            q.contains("bu haber ne demek")||q.contains("şu haber ne demek")||
+           q.contains("şu habere bak")||q.contains("bu paylaşıma bak")||
            q.contains("şu yazıyı analiz")||q.contains("bu paylaşımı analiz"))
             return new Result(Kind.SCREEN_ANALYZE);
         if(q.contains("görüntülü görüşmeye geç")||q.contains("görüntülü aramaya geç")||
