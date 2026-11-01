@@ -40,3 +40,14 @@
 - Her modül temel kaynak testlerinden ve GitHub release derlemesinden geçmeden üretim moduna girmez.
 - Hesap bağlama, alım-satım, ödeme, medya yayınlama, WhatsApp eylemleri gibi etkili işlemler için ayrı kullanıcı onayı gerekir.
 - Önce güvenilir arka plan uyandırma ve ses deneyimi; sonra hibrit model, Windows köprüsü, kripto read-only, ticaret ve video araçları.
+
+## 2026-11-01 birleşik geliştirme notları (telefon testi bekliyor)
+
+- Sesli uyandırma ile ekran analizi, Quick Settings kısayolu ile ekran analizi aynı `PandoraScreenAnalysisController` üzerinden yönetilir.
+- **Quick Settings ekran analizi artık mikrofonun aktif olmasını gerektirmez.** Kullanıcı Android Erişilebilirlik iznini ayrı olarak açmalı; kısayolu Android 13+ sistem istemiyle ekleyebilir.
+- Ekran OCR'si ML Kit ile cihazda çalışır; görüntü dosyası kayıt/ileti olarak gönderilmez. Seçilen AI modeline yalnızca çıkarılan metin gider.
+- Ayrı ekran-bulut onayı, kilit ekranı kontrolü, güvenli ekranlara karşı yerel kontroller, işlem süresi sınırı ve tek işlem politikası vardır.
+- Ekran analizinde `ModelRouter.askScreenAsync` kullanılır: cihaz eylemleri kapalıdır, kayıtlı notlar ve sohbet geçmişi bu isteme eklenmez.
+- Sesli yanıt sadece kulaklık/uyumlu ses çıkışında ve telefon görüşmesi dışında denenir. Sonuç için Android bildirim izni gereklidir.
+- Şu anda yalnızca Java kaynak testleri ve Android derlemesi denetleniyor. **Gerçek cihazda sürekli mikrofon, WhatsApp ses/video araması, MIUI hızlı panel geçişi, OCR doğruluk, bulut ve TTS testleri beklemede.**
+- Hiçbir kod gönderiminde yeni APK üretilmez; kalıcı release yalnızca `workflow_dispatch` ile ayrıca başlatılır. Üretim paket kimliği ve imzası değişmez.

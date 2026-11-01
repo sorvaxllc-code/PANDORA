@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
+import android.media.AudioAttributes;
 import android.speech.tts.UtteranceProgressListener;
 import java.util.Locale;
 
@@ -25,6 +26,10 @@ public final class PandoraHeadphoneReply {
                 || !PandoraAlerts.headsetConnected(app) || PandoraAlerts.inCall(app)) {
                 tts.shutdown(); return;
             }
+            tts.setAudioAttributes(new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build());
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) {}
                 @Override public void onDone(String id) { main.post(tts::shutdown); }

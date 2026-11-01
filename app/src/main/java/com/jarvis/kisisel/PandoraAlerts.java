@@ -84,7 +84,6 @@ public final class PandoraAlerts {
                 case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
                 case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
                 case AudioDeviceInfo.TYPE_BLE_HEADSET:
-                case AudioDeviceInfo.TYPE_BLE_SPEAKER:
                 case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
                 case AudioDeviceInfo.TYPE_WIRED_HEADSET:
                 case AudioDeviceInfo.TYPE_USB_HEADSET:

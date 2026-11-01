@@ -722,6 +722,10 @@ public class MainActivity extends Activity {
                     if(result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
                         result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) {
                         Toast.makeText(this,"PANDORA Hızlı Ayarlarda hazır.",Toast.LENGTH_LONG).show();
+                        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(
+                            Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) {
+                            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIF_REQUEST);
+                        }
                     } else if(result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED) {
                         Toast.makeText(this,"PANDORA kısayolu eklenmedi.",Toast.LENGTH_LONG).show();
                     } else {
@@ -810,6 +814,10 @@ public class MainActivity extends Activity {
         if(requestCode==WAKE_AUDIO_REQUEST) {
             if(grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED)startWakeMonitor();
             else Toast.makeText(this,"Mikrofon izni verilmedi.",Toast.LENGTH_LONG).show();
+        } else if(requestCode==NOTIF_REQUEST &&
+                (grantResults.length==0 || grantResults[0]!=PackageManager.PERMISSION_GRANTED)) {
+            Toast.makeText(this,"Bildirim izni olmadan ekran analizi sonuçlarını göremeyebilirsin.",
+                Toast.LENGTH_LONG).show();
         }
     }
 
