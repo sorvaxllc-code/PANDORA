@@ -39,11 +39,11 @@ public class MemoryDb extends SQLiteOpenHelper {
     public void message(String role, String content) {
         ContentValues v = new ContentValues(); v.put("role", role); v.put("content", content); v.put("created", System.currentTimeMillis());
         SQLiteDatabase db = getWritableDatabase(); db.insert("messages", null, v);
-        db.execSQL("DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 150)");
+
     }
     public List<String[]> messages() {
         List<String[]> out = new ArrayList<>();
-        try (Cursor c = getReadableDatabase().rawQuery("SELECT role,content FROM messages ORDER BY id DESC LIMIT 30", null)) {
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT role,content FROM messages ORDER BY id DESC LIMIT 150", null)) {
             while(c.moveToNext()) out.add(0, new String[]{ c.getString(0), c.getString(1) });
         }
         return out;

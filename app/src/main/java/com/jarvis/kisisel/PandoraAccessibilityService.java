@@ -91,6 +91,38 @@ public final class PandoraAccessibilityService extends AccessibilityService {
         });
     }
 
+    /** Captures pixels only after an explicit request; never writes a screenshot to disk. */
+    public static void captureImage(String expectedPackage,Consumer<String> callback){
+        PandoraAccessibilityService svc=instance;
+        if(svc==null || Build.VERSION.SDK_INT<30){callback.accept(null);return;}
+        AccessibilityNodeInfo root=svc.currentAppRoot();
+        if(root==null || !ScreenCapturePolicy.canUse(expectedPackage,String.valueOf(root.getPackageName()),containsPasswordInput(root))){callback.accept(null);return;}
+        try{svc.takeScreenshot(android.view.Display.DEFAULT_DISPLAY,svc.getMainExecutor(),new TakeScreenshotCallback(){
+            public void onFailure(int code){callback.accept(null);}
+            public void onSuccess(ScreenshotResult result){
+                String encoded=null;
+                android.graphics.Bitmap hardware=null,copy=null,small=null;
+                try{
+                    AccessibilityNodeInfo latest=svc.currentAppRoot();
+                    android.app.KeyguardManager lock=svc.getSystemService(android.app.KeyguardManager.class);
+                    if(instance!=svc || latest==null || lock!=null&&lock.isDeviceLocked() ||
+                        !ScreenCapturePolicy.canUse(expectedPackage,String.valueOf(latest.getPackageName()),containsPasswordInput(latest)))return;
+                    hardware=android.graphics.Bitmap.wrapHardwareBuffer(result.getHardwareBuffer(),result.getColorSpace());
+                    if(hardware==null)return;
+                    copy=hardware.copy(android.graphics.Bitmap.Config.ARGB_8888,false);
+                    float scale=Math.min(1f,1280f/Math.max(copy.getWidth(),copy.getHeight()));
+                    small=android.graphics.Bitmap.createScaledBitmap(copy,Math.max(1,(int)(copy.getWidth()*scale)),Math.max(1,(int)(copy.getHeight()*scale)),true);
+                    java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+                    small.compress(android.graphics.Bitmap.CompressFormat.JPEG,80,bytes);
+                    encoded=android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP);
+                }finally{
+                    if(small!=null && small!=copy)small.recycle();if(copy!=null)copy.recycle();if(hardware!=null)hardware.recycle();
+                    result.getHardwareBuffer().close();callback.accept(encoded);
+                }
+            }
+        });}catch(RuntimeException error){callback.accept(null);}
+    }
+
     public static String readVisibleText() {
         PandoraAccessibilityService svc = instance;
         if (svc == null) return "";
@@ -144,28 +176,30 @@ public final class PandoraAccessibilityService extends AccessibilityService {
 
     /** Attempts to use WhatsApp's visible in-call video button, never starts a new call. */
     public static String requestWhatsAppVideoSwitch() {
+        if(!WhatsAppCallPolicy.supportedPackage(foregroundPackage()))return "WhatsApp görüşme ekranı açık değil; işlem yapılmadı.";
+        return requestVideoSwitch();
+    }
+    public static String requestVideoSwitch() {
         PandoraAccessibilityService svc = instance;
         if(svc==null) return "Önce PANDORA ekran erişimi iznini açmalısın.";
         AccessibilityNodeInfo root=svc.currentAppRoot();
         if(root==null) return "Görüntülü görüşmeye geçmek için aktif uygulamanın ekranına erişemedim.";
         String pkg=String.valueOf(root.getPackageName());
-        if(!WhatsAppCallPolicy.supportedPackage(pkg))
-            return "Görüntülü görüşme komutunu yalnızca WhatsApp çağrı ekranında deneyebilirim.";
         CallControls controls = inspectCallControls(root);
         if (controls.activeVideo)
-            return "WhatsApp'ta görüntülü görüşme zaten etkin görünüyor; işlem yapmadım.";
-        if(!WhatsAppCallPolicy.mayUpgrade(pkg,controls.endCall,controls.audioControl,controls.activeVideo))
+            return "Görüntülü görüşme zaten etkin görünüyor; işlem yapmadım.";
+        if(!(controls.endCall && controls.audioControl && !controls.activeVideo))
             return "Aktif sesli görüşmeyi güvenilir biçimde doğrulayamadım; işlem yapmadım.";
         AccessibilityNodeInfo video=locateVideoButton(root);
-        if(video==null) return "WhatsApp'ın görüntülü görüşmeye geçiş düğmesini bulamadım.";
+        if(video==null) return "Görüşmenin görüntülüye geçiş düğmesini bulamadım.";
         AccessibilityNodeInfo clickable=video;
         // One parent at most: never click a large, unrelated container.
         if(!clickable.isClickable()) clickable=clickable.getParent();
         if(clickable!=null && clickable.isVisibleToUser() && clickable.isEnabled()
                 && clickable.isClickable()
                 && clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            return "WhatsApp görüntülü görüşmeye geçiş düğmesine dokunma isteğini Android'e ilettim. İşlemin tamamlandığını doğrulamadım; karşı tarafın onayı gerekebilir.";
-        return "WhatsApp görüntülü görüşmeye geçiş işlemini Android engelledi.";
+            return "Görüntülü görüşmeye geçiş düğmesine dokunma isteğini Android'e ilettim. İşlemin tamamlandığını doğrulamadım; karşı tarafın onayı gerekebilir.";
+        return "Görüntülü görüşmeye geçiş işlemini Android engelledi.";
     }
 
     private static final class CallControls {

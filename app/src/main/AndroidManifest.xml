@@ -33,6 +33,7 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <activity android:name=".DeviceTaskActivity" android:exported="false" android:theme="@android:style/Theme.Material.Dialog.Alert" />
         <service android:name=".WakeMonitorService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity android:name=".PandoraQuickActionActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"

@@ -6,8 +6,9 @@ public class WakeQuickCommandTest {
     }
     public static void main(String[] args) {
         check("Hey Pandora, saat kaç?",WakeQuickCommand.Kind.TIME);
-        check("PANDORA! şu an saat kaç",WakeQuickCommand.Kind.TIME);
-        check("Pandora, bugün ayın kaçı?",WakeQuickCommand.Kind.DATE);
+        check("HEY PANDORA! şu an saat kaç",WakeQuickCommand.Kind.TIME);
+        if(WakeQuickCommand.parse("Pandora saat kaç")!=null)throw new AssertionError("Explicit Hey required");
+        check("Hey Pandora, bugün ayın kaçı?",WakeQuickCommand.Kind.DATE);
         check("Hey Pandora, bugün hangi gün?",WakeQuickCommand.Kind.DATE);
         check("Hey Pandora, şarjım kaç?",WakeQuickCommand.Kind.BATTERY);
         check("Hey Pandora",WakeQuickCommand.Kind.WAKE_ONLY);
@@ -16,7 +17,7 @@ public class WakeQuickCommandTest {
         check("Hey Pandora bu haber ne demek",WakeQuickCommand.Kind.SCREEN_ANALYZE);
         check("Hey Pandora görüntülü görüşmeye geç",WakeQuickCommand.Kind.VIDEO_UPGRADE);
         check("Hey Pandora, Binance'de pozisyon aç",WakeQuickCommand.Kind.UNKNOWN);
-        check("Pandora, WhatsApp görüşmesini kapat",WakeQuickCommand.Kind.UNKNOWN);
+        check("Hey Pandora, WhatsApp görüşmesini kapat",WakeQuickCommand.Kind.UNKNOWN);
         if(WakeQuickCommand.parse("Merhaba Pandora")!=null)throw new AssertionError("Needs prefix");
         if(WakeQuickCommand.parse(null)!=null)throw new AssertionError("Null input");
         System.out.println("WakeQuickCommand passed");
