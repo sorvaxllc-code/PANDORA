@@ -10,7 +10,7 @@ public class SharedTextGuardTest {
             throw new AssertionError("Substantial shared text can be analyzed");
         if (SharedTextGuard.onlyLink("Bu bir açıklamadır."))
             throw new AssertionError("Plain text is not URL-only");
-        if (SharedTextGuard.safeText(new String(new char[7000]).replace('\\0','x')).length()!=6000)
+        if (SharedTextGuard.safeText("x".repeat(7000)).length()!=6000)
             throw new AssertionError("Size limit");
         System.out.println("SharedTextGuard passed");
     }
