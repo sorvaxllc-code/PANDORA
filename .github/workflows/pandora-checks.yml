@@ -26,3 +26,14 @@ jobs:
         run: gradle --no-daemon :app:compileDebugJavaWithJavac
       - name: Android lint (no installable APK)
         run: gradle --no-daemon :app:lintDebug
+      - name: Print remaining Android lint findings if failed
+        if: failure()
+        run: |
+          for report in \
+            app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt \
+            app/build/reports/lint-results-debug.txt; do
+            if test -f "$report"; then
+              cat "$report"
+              break
+            fi
+          done
