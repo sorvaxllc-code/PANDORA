@@ -2,6 +2,11 @@ package com.jarvis.kisisel;
 import android.Manifest;
 import android.app.Service;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
@@ -93,21 +98,42 @@ public final class WakeMonitorService extends Service implements RecognitionList
         handler.postDelayed(retry, delayMs);
     }
     private void hear(Bundle results) {
-        if (results == null) return;
-        ArrayList<String> texts = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        if (texts == null) return;
-        for (String phrase : texts) {
-            if (WakeWordMatcher.matches(phrase)) {
-                long now = android.os.SystemClock.elapsedRealtime();
-                if (now - lastTriggerMs < 20000) return;
-                lastTriggerMs = now;
-                PandoraAlerts.postImportant(this, "PANDORA seni duydu", "Komut vermek için bildirime dokun.");
-                // Don't interrupt an active phone/WhatsApp call.
-                if (ttsReady && PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this)) {
-                    tts.speak("Dinliyorum. Komut vermek için bildirime dokun.", TextToSpeech.QUEUE_FLUSH, null, "wake-confirm");
-                }
-                return;
+        if(results==null)return;
+        ArrayList<String> texts=results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if(texts==null)return;
+        for(String phrase:texts) {
+            WakeQuickCommand.Result result=WakeQuickCommand.parse(phrase);
+            if(result==null)continue;
+            long now=android.os.SystemClock.elapsedRealtime();
+            if(now-lastTriggerMs<12000)return;
+            lastTriggerMs=now;
+            String response;
+            switch(result.kind) {
+                case TIME:
+                    response="Şu an saat "+new SimpleDateFormat("HH:mm",new Locale("tr","TR")).format(new Date())+".";
+                    break;
+                case DATE:
+                    response="Bugün "+DateFormat.getDateInstance(DateFormat.FULL,new Locale("tr","TR")).format(new Date())+".";
+                    break;
+                case BATTERY:
+                    Intent battery=registerReceiver(null,new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+                    int level=battery==null?-1:battery.getIntExtra(BatteryManager.EXTRA_LEVEL,-1);
+                    int scale=battery==null?-1:battery.getIntExtra(BatteryManager.EXTRA_SCALE,-1);
+                    response=(level<0||scale<=0)?"Pil seviyesi şu anda okunamadı.":
+                        "Telefonun şarjı yüzde "+Math.round(100.0f*level/scale)+".";
+                    break;
+                case WAKE_ONLY:
+                    response="Seni duydum. Saat, tarih veya şarj sorabilirsin. Diğer komutlar için bildirime dokun.";
+                    break;
+                default:
+                    response="Seni duydum. Bu isteği arka planda çalıştırmıyorum. Uygulamayı açarak devam et.";
+                    break;
             }
+            PandoraAlerts.postImportant(this,"PANDORA · Sesli komut",response);
+            if(ttsReady && PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this)) {
+                tts.speak(response,TextToSpeech.QUEUE_FLUSH,null,"pandora-wake");
+            }
+            return;
         }
     }
     @Override public void onReadyForSpeech(Bundle params) {}
@@ -117,6 +143,9 @@ public final class WakeMonitorService extends Service implements RecognitionList
     @Override public void onEndOfSpeech() {}
     @Override public void onError(int error) {
         listening = false;
+        if(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){
+            stopSelf();return;
+        }
         // A busy recognizer or other app using the microphone can interrupt listening.
         restart((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                  error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) ? 5000 : 1500);
@@ -124,7 +153,8 @@ public final class WakeMonitorService extends Service implements RecognitionList
     @Override public void onResults(Bundle results) {
         hear(results); listening = false; restart(1900);
     }
-    @Override public void onPartialResults(Bundle partialResults) { hear(partialResults); }
+    // Partial recognition is often just the wake word: wait for a final transcript.
+    @Override public void onPartialResults(Bundle partialResults) { }
     @Override public void onEvent(int eventType, Bundle params) {}
     @Override public void onDestroy() {
         stopped = true; running = false; listening = false;

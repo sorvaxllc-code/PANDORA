@@ -135,7 +135,7 @@ public class MainActivity extends Activity {
         orb=new OrbView(this); LinearLayout.LayoutParams orbParams=lp(-1,dp(172)); orbParams.topMargin=dp(3);
         page.addView(orb,orbParams);
         status=text("",12,CYAN,true);status.setGravity(Gravity.CENTER);status.setLetterSpacing(.13f);page.addView(status);
-        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ · 1.1",11,MUTED,false);subtitle.setGravity(Gravity.CENTER);
+        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ · 1.2",11,MUTED,false);subtitle.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subparams=lp(-1,dp(32));page.addView(subtitle,subparams);
         HorizontalScrollView quickScroll=new HorizontalScrollView(this);quickScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout quickRow=new LinearLayout(this);quickRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -588,7 +588,7 @@ public class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this).setTitle("Hey Pandora · Deneysel")
-            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Hey Pandora duyulunca bildirim gönderilir. Başlatılsın mı?")
+            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Saat, tarih ve şarj sorularını algılarsa güvenli yanıt verir. Diğer komutlarda yalnızca bildirim gönderir. Başlatılsın mı?")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Başlat",(d,w)->{
                 if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)

@@ -15,3 +15,7 @@ java -cp /tmp/pandora-parser-test ConversationIntentTest
 # Wake word recognition classifier
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeWordMatcher.java tests/WakeWordMatcherTest.java
 java -cp /tmp/pandora-parser-test WakeWordMatcherTest
+
+# Wake words with limited read-only tasks.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeWordMatcher.java app/src/main/java/com/jarvis/kisisel/WakeQuickCommand.java tests/WakeQuickCommandTest.java
+java -cp /tmp/pandora-parser-test WakeQuickCommandTest

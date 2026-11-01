@@ -34,3 +34,8 @@ Uygulama menüsündeki **Hey Pandora** düğmesi açık rızayla mikrofon ön pl
 ## Guvenli kalici imza altyapisi
 
 Ilerideki stabil surumler icin GitHub'a **kaynak koduna anahtar koymayan** bir imzali APK yolu eklendi. Anahtarlar henuz hazir degil. Aciklama: `SIGNING_TR.md`. Debug ve stabil paketler birbirinden ayri kalir.
+
+
+## PANDORA 12
+
+Tek cümlede "Hey Pandora saat kaç", "Hey Pandora bugün ayın kaçı", "Hey Pandora şarjım kaç" denemeleri yapabilir. Sonuçlar bildirime aktarılır; kulaklık bağlı ve görüşme yoksa sesli okunması denenir. Diğer komutlar arka planda yürütülmez; uygulamaya yönlendirilir. Kısmi speech recognition sonuçları erken tetikleme yapmaz. Mikrofon sistemi Android tarafından kesilebilir. Debug sürümü ayrı `.trial12` kimliklidir; kalıcı imzalı `.stable` sürüm için GitHub sırları henüz tanımlı değildir.
