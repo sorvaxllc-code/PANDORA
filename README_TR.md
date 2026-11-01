@@ -24,3 +24,8 @@ Bu ortamda Android SDK olmadigindan workflow gercek GitHub runner uzerinde henuz
 ## PANDORA 11 – deneysel Hey Pandora ve uyarı testi
 
 Uygulama menüsündeki **Hey Pandora** düğmesi açık rızayla mikrofon ön plan hizmeti başlatır. Dinleme kalıcı sistem bildiriminden durdurulabilir. Bu bir kesintisiz hotword motoru değildir; sistem SpeechRecognizer çevrimdışı tercihine rağmen bulut kullanabilir ve başka uygulamalarda/çağrılarda kesilebilir. Algılanan uyandırma sözcüğü yalnızca bildirim gönderir; henüz serbest komut icra etmez. **Uyarı testi** bildirimi ve kulaklık bağlıysa (çağrı dışındayken) TTS sesli uyarısını dener. Otomatik Binance takibi henüz yoktur. PANDORA TEST sürümü eski kurulumdan ayrı veriler tutar. Kalıcı release APK imzası henüz kurulmamıştır.
+
+
+### PANDORA 11 kurulum notu
+
+Önceki PANDORA TEST debug APK'sı farklı GitHub çalıştırıcılarında farklı anahtarlarla imzalanabilir. PANDORA 11 deneysel sürümü `com.jarvis.kisisel.trial11` olarak **ayrı** kurulacak; kurulu PANDORA/PANDORA TEST verileri kaldırılmamalıdır. Bu bir kalıcı güncelleme çözümü değildir. Sonraki sürümler için sabit, güvenli release imzalama anahtarını GitHub Secrets ile kurmak gerekir. Gizli imzalama anahtarını repoya commit etmeyin.
