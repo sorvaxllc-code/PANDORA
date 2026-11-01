@@ -17,14 +17,8 @@ public final class PandoraQuickActionActivity extends Activity {
         finish();
         if(!WakeMonitorService.ACTION_SCREEN.equals(action))return;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if(!WakeMonitorService.running)return;
-            try {
-                getApplicationContext().startService(
-                    new Intent(getApplicationContext(),WakeMonitorService.class)
-                        .setAction(WakeMonitorService.ACTION_SCREEN));
-            } catch(RuntimeException ignored) {
-                // Android may disallow background service interaction.
-            }
+            PandoraScreenAnalysisController.request(getApplicationContext(),
+                answer -> PandoraHeadphoneReply.say(getApplicationContext(),answer));
         },650);
     }
 }

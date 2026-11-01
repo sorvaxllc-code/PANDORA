@@ -20,16 +20,16 @@ public final class ModelRouter {
    case "LOCAL":return "YEREL";case "CLOUD":return "BULUT";case "AUTO":return "OTOMATİK";default:return "KOMUT";}}
  public boolean allowCloudMemory(){return prefs.getBoolean("cloud_history_optin",false);}
  public void setAllowCloudMemory(boolean value){prefs.edit().putBoolean("cloud_history_optin",value).apply();}
- private JSONArray messages(String prompt,boolean cloud,boolean allowActions) throws Exception {
+ private JSONArray messages(String prompt,boolean cloud,boolean allowActions,boolean includeMemory) throws Exception {
    JSONArray a=new JSONArray();
    StringBuilder system=new StringBuilder(ModelIntentPolicy.systemInstructions(allowActions));
-   if(!cloud || allowCloudMemory()){
+   if(includeMemory && (!cloud || allowCloudMemory())){
      List<String> notes=memory.notes();int n=Math.min(notes.size(),cloud?10:15);
      system.append("Kullanıcının notları (doğrulanmamış olabilir):\n");
      for(int i=0;i<n;i++){String note=notes.get(i);system.append("- ").append(note.length()>250?note.substring(0,250):note).append("\n");}
    }
    a.put(new JSONObject().put("role","system").put("content",system.toString()));
-   if(!cloud || allowCloudMemory()){
+   if(includeMemory && (!cloud || allowCloudMemory())){
      List<String[]> hist=memory.messages();int start=Math.max(0,hist.size()-5);
      for(int i=start;i<hist.size();i++){
        String[] m=hist.get(i);
@@ -41,13 +41,18 @@ public final class ModelRouter {
    return a;
  }
  public HttpAiProvider.CancelToken askAsync(String prompt,Callback callback){
-   return askInternal(prompt,callback,true);
+   return askInternal(prompt,callback,true,true);
  }
  /** Read-only reasoning path; returned model content never becomes a device action. */
  public HttpAiProvider.CancelToken askInformationalAsync(String prompt,Callback callback) {
-   return askInternal(prompt,callback,false);
+   return askInternal(prompt,callback,false,true);
  }
- private HttpAiProvider.CancelToken askInternal(String prompt,Callback callback,boolean allowActions) {
+ /** Never include unrelated notes/chat in a screen review. */
+ public HttpAiProvider.CancelToken askScreenAsync(String prompt,Callback callback) {
+   return askInternal(prompt,callback,false,false);
+ }
+ private HttpAiProvider.CancelToken askInternal(String prompt,Callback callback,
+                                                boolean allowActions,boolean includeMemory) {
    final HttpAiProvider.CancelToken cancellation=new HttpAiProvider.CancelToken();
    new Thread(()->{
      String text=null,source="";String errors="";
@@ -55,13 +60,13 @@ public final class ModelRouter {
      if(!cancellation.isCancelled() && (mode.equals("CLOUD")||mode.equals("AUTO")) && !key.isEmpty()){
        try {
          AiProvider cloud=new HttpAiProvider("OpenRouter ücretsiz",FreeCloudPolicy.COMPLETIONS_URL,FreeCloudPolicy.MODEL,key,FreeCloudPolicy.CLOUD_READ_TIMEOUT_MS);
-         text=((HttpAiProvider)cloud).answer(messages(prompt,true,allowActions),cancellation);source=cloud.id();
+         text=((HttpAiProvider)cloud).answer(messages(prompt,true,allowActions,includeMemory),cancellation);source=cloud.id();
        } catch(Exception e){errors="Bulut: "+e.getMessage();}
      }else if(mode.equals("CLOUD")){errors="Bulut için Ayarlar'dan OpenRouter anahtarını ekle.";}
      if(!cancellation.isCancelled() && text==null && (mode.equals("LOCAL")||mode.equals("AUTO"))){
        try {
          HttpAiProvider local=new HttpAiProvider("Yerel Qwen","http://127.0.0.1:8080/v1/chat/completions","jarvis-local","",mode.equals("AUTO")?FreeCloudPolicy.FALLBACK_LOCAL_READ_TIMEOUT_MS:FreeCloudPolicy.LOCAL_READ_TIMEOUT_MS);
-         text=local.answer(messages(prompt,false,allowActions),cancellation);source=local.id();
+         text=local.answer(messages(prompt,false,allowActions,includeMemory),cancellation);source=local.id();
        } catch(Exception e){errors+=(errors.isEmpty()?"":"; ")+"Yerel: "+e.getMessage();}
      }
      if(cancellation.isCancelled())return;

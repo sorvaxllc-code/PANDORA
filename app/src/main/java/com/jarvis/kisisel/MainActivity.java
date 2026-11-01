@@ -686,7 +686,7 @@ public class MainActivity extends Activity {
             .setTitle("PANDORA · Başka uygulamadayken ekrana bak")
             .setMessage("Android Hızlı Ayarlar panelini iki kez aşağı kaydırıp Düzenle'ye dokun. "
                 +"'PANDORA · Ekrana Bak' kutucuğunu panele ekle. "
-                +"Önce PANDORA'da 'Hey Pandora' hizmetini başlatmalı ve 'Ekran erişimi' iznini vermelisin. "
+                +"'Ekran erişimi' iznini vermelisin; mikrofon dinlemesi gerekli değil. "
                 +"Sonra X gibi bir uygulamadayken hızlı panelden PANDORA kutucuğuna dokun. "
                 +"Kutucuk paneli kapatarak alttaki uygulamanın ekranını analiz etmeyi dener. "
                 +"Bütün Android sürümlerinde veya korumalı ekranlarda çalışması garanti değildir.")

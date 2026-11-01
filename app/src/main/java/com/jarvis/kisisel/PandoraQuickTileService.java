@@ -15,7 +15,8 @@ public final class PandoraQuickTileService extends TileService {
         super.onStartListening();
         Tile tile=getQsTile();
         if(tile==null)return;
-        tile.setState(Tile.STATE_ACTIVE);
+        tile.setState(PandoraAccessibilityService.isConnected()
+            ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE);
         tile.setLabel("PANDORA · Ekrana Bak");
         tile.updateTile();
     }
@@ -31,7 +32,7 @@ public final class PandoraQuickTileService extends TileService {
 
     private void open() {
         boolean canAnalyze=PandoraTilePolicy.canAnalyzeFromTile(
-            WakeMonitorService.running, PandoraAccessibilityService.isConnected());
+            PandoraAccessibilityService.isConnected());
         Intent intent;
         if(canAnalyze) {
             intent=new Intent(this,PandoraQuickActionActivity.class)

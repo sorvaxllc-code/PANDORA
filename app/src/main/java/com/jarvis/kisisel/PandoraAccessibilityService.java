@@ -19,6 +19,16 @@ public final class PandoraAccessibilityService extends AccessibilityService {
 
     public static boolean isConnected() { return instance != null; }
 
+    /** Foreground app for determining whether Quick Settings has returned to the underlying app. */
+    public static String foregroundPackage() {
+        PandoraAccessibilityService svc=instance;
+        if(svc==null)return null;
+        AccessibilityNodeInfo root=svc.getRootInActiveWindow();
+        if(root==null)return null;
+        CharSequence name=root.getPackageName();
+        return name==null?null:name.toString();
+    }
+
     /** Only a user-initiated notification action may dismiss the open notification panel. */
     public static boolean dismissNotificationShadeIfVisible() {
         PandoraAccessibilityService svc=instance;

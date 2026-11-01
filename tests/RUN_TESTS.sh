@@ -36,7 +36,7 @@ java -cp /tmp/pandora-parser-test ScreenCloudPolicyTest
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeWordMatcher.java app/src/main/java/com/jarvis/kisisel/WakeQuickCommand.java app/src/main/java/com/jarvis/kisisel/WakeConversationState.java tests/WakeConversationStateTest.java
 java -cp /tmp/pandora-parser-test WakeConversationStateTest
 
-# Quick Settings tile requires foreground wake service and explicit accessibility permission.
+# Quick Settings tile requires Accessibility permission, not a microphone service.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/PandoraTilePolicy.java tests/PandoraTilePolicyTest.java
 java -cp /tmp/pandora-parser-test PandoraTilePolicyTest
 
