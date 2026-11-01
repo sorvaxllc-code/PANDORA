@@ -12,6 +12,9 @@ import android.app.Activity;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.app.AlertDialog;
+import android.app.StatusBarManager;
+import android.content.ComponentName;
+import android.graphics.drawable.Icon;
 import android.content.Intent;
 import android.content.ActivityNotFoundException;
 import android.content.pm.PackageManager;
@@ -683,16 +686,51 @@ public class MainActivity extends Activity {
 
     private void showQuickTileSetup() {
         new AlertDialog.Builder(this)
-            .setTitle("PANDORA · Başka uygulamadayken ekrana bak")
-            .setMessage("Android Hızlı Ayarlar panelini iki kez aşağı kaydırıp Düzenle'ye dokun. "
-                +"'PANDORA · Ekrana Bak' kutucuğunu panele ekle. "
-                +"'Ekran erişimi' iznini vermelisin; mikrofon dinlemesi gerekli değil. "
-                +"Sonra X gibi bir uygulamadayken hızlı panelden PANDORA kutucuğuna dokun. "
-                +"Kutucuk paneli kapatarak alttaki uygulamanın ekranını analiz etmeyi dener. "
-                +"Bütün Android sürümlerinde veya korumalı ekranlarda çalışması garanti değildir.")
+            .setTitle("PANDORA · Başka uygulamada ekrana bak")
+            .setMessage("Android Hızlı Ayarlar panelinde PANDORA kısayolunu kullanarak "
+                +"X, tarayıcı ve diğer uygulamalardaki metinleri analiz ettirebilirsin. "
+                +"Bu işlem için mikrofon dinlemesi gerekmez; ancak Android Erişilebilirlik iznini "
+                +"senin açman gerekir. Bulut yapay zekâsına ekran metni gönderme ayrıca izinlidir. "
+                +"Korumalı ekranlarda sonuç alınamayabilir.")
             .setNegativeButton("Kapat",null)
-            .setPositiveButton("Ekran erişimi ayarları",(d,w)->openScreenAccessibilitySettings())
+            .setNeutralButton("Ekran erişimi izni",(d,w)->openScreenAccessibilitySettings())
+            .setPositiveButton("Hızlı Ayarlara ekle",(d,w)->requestQuickTile())
             .show();
+    }
+
+    private void requestQuickTile() {
+        if(Build.VERSION.SDK_INT < 33) {
+            new AlertDialog.Builder(this)
+                .setTitle("PANDORA Hızlı Ayarlar")
+                .setMessage("Hızlı Ayarlar'ı aç, Düzenle'ye dokun ve "
+                    +"'PANDORA · Ekrana Bak' kutucuğunu panele ekle.")
+                .setPositiveButton("Tamam",null).show();
+            return;
+        }
+        try {
+            StatusBarManager manager=getSystemService(StatusBarManager.class);
+            if(manager==null) {
+                Toast.makeText(this,"Telefonun Hızlı Ayarlar hizmeti bulunamadı.",Toast.LENGTH_LONG).show();
+                return;
+            }
+            manager.requestAddTileService(
+                new ComponentName(this,PandoraQuickTileService.class),
+                "PANDORA · Ekrana Bak",
+                Icon.createWithResource(this,R.mipmap.ic_launcher),
+                getMainExecutor(),
+                result -> {
+                    if(result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
+                        result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) {
+                        Toast.makeText(this,"PANDORA Hızlı Ayarlarda hazır.",Toast.LENGTH_LONG).show();
+                    } else if(result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED) {
+                        Toast.makeText(this,"PANDORA kısayolu eklenmedi.",Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(this,"Hızlı Ayarlar kısayolu eklenemedi. Panelden elle eklemeyi dene.",Toast.LENGTH_LONG).show();
+                    }
+                });
+        } catch(RuntimeException ex) {
+            Toast.makeText(this,"Hızlı Ayarlar isteği engellendi. Panelden elle ekleyebilirsin.",Toast.LENGTH_LONG).show();
+        }
     }
 
     private void openScreenAccessibilitySettings() {
