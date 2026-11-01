@@ -287,6 +287,9 @@ public class MainActivity extends Activity {
             q.contains("bu haber ne demek") || q.contains("şu haber ne demek")) {
             if(!PandoraAccessibilityService.isConnected()) {
                 reply("Ekran erişimi henüz açık değil. PANDORA > Ekran erişimi seçeneğinden izin verebilirsin.");
+            } else if (!ScreenCloudPolicy.allowed(modelRouter.mode(),prefs.getBoolean("pandora_screen_cloud_optin",false))
+                    && !"OFF".equals(modelRouter.mode())) {
+                reply("Ekran metnini bulutla analiz etmek için Ayarlar > Ekran metnini buluta gönder seçeneğinden ayrı onay vermelisin.");
             } else {
                 String screen=PandoraAccessibilityService.readVisibleText();
                 if(screen.length()<60)reply("Bu ekranda analiz edilebilir metin göremedim.");
@@ -489,7 +492,8 @@ public class MainActivity extends Activity {
             "Modüller / Ajanlar",
             "Hatırlatıcılar",
             "Konuşma geçmişini sil",
-            "Gizlilik ve sınırlamalar"
+            "Gizlilik ve sınırlamalar",
+            "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI")
         };
         new AlertDialog.Builder(this).setTitle("PANDORA · AYARLAR").setItems(options,(d,which)->{
             switch(which){
@@ -511,12 +515,31 @@ public class MainActivity extends Activity {
                     .setNegativeButton("İptal",null).setPositiveButton("Sil",(dd,w)->{
                         memory.clearMessages();feed.removeAllViews();reply("Konuşma geçmişi silindi.");
                     }).show();break;
+                case 11:toggleScreenCloudConsent();break;
                 case 10:new AlertDialog.Builder(this).setTitle("Gizlilik / sınırlar")
                     .setMessage("Hazır komutlar cihazda çalışır. Yerel mod 127.0.0.1:8080'e bağlanır. Bulut/Otomatik modlarını kendin seçtiğinde mesajların OpenRouter'ın bulut sağlayıcılarına iletilir. Notlar ve geçmiş varsayılan olarak buluta gönderilmez. Anahtar Android Keystore ile şifrelenir ancak telefona yüklü uygulamanın kullanıcı anahtarı kullanımı tamamen risksiz değildir. Bulut ücretsiz istek kotasına tabidir; model otomatik olarak ücretli modele geçmez. 8B yerel model bu telefonda yavaştır. Ses tanıma servisi ayrı internete bağlanabilir. Kesintisiz dinleme, WhatsApp görüşmesi kapatma, Binance hesabı, antivirüs, otomatik video yayınlama henüz yoktur.")
                     .setPositiveButton("Tamam",null).show();break;
             }
         }).show();
     }
+    private void toggleScreenCloudConsent() {
+        if(prefs.getBoolean("pandora_screen_cloud_optin",false)) {
+            prefs.edit().putBoolean("pandora_screen_cloud_optin",false).apply();
+            Toast.makeText(this,"Ekran metni için bulut izni kapatıldı",Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Ekran metnini buluta göndermeye izin ver?")
+            .setMessage("Bu izni açarsan yalnızca açıkça 'Hey Pandora, şu ekrana bak' komutu verdiğinde "
+                +"erişilebilir ekran metni seçili bulut yapay zekâ sağlayıcısına gönderilebilir. "
+                +"WhatsApp mesajları, kişisel bilgiler veya bildirimler de ekranda görünüyorsa metne karışabilir. "
+                +"Bu onay varsayılan olarak kapalıdır ve istediğinde geri alabilirsin.")
+            .setNegativeButton("Hayır",null)
+            .setPositiveButton("İzin ver",(dialog,which)->{
+                prefs.edit().putBoolean("pandora_screen_cloud_optin",true).apply();
+                Toast.makeText(this,"Ekran için bulut izni açıldı",Toast.LENGTH_LONG).show();
+            }).show();
+    }
+
     private void chooseMode() {
         String[] labels={"Yalnızca hazır komutlar", "Yerel (Termux:8080)", "Bulut (OpenRouter ücretsiz)", "Otomatik (önce bulut, sonra yerel)"};
         String[] values={"OFF","LOCAL","CLOUD","AUTO"};

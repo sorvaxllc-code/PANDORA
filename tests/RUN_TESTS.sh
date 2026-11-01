@@ -27,3 +27,7 @@ java -cp /tmp/pandora-parser-test WakeVoicePolicyTest
 # Shared text, URLs, and data size guard.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/SharedTextGuard.java tests/SharedTextGuardTest.java
 java -cp /tmp/pandora-parser-test SharedTextGuardTest
+
+# Screen reading is local by default, separate explicit consent before cloud analysis.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/ScreenCloudPolicy.java tests/ScreenCloudPolicyTest.java
+java -cp /tmp/pandora-parser-test ScreenCloudPolicyTest

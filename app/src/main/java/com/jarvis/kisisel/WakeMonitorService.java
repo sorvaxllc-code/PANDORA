@@ -186,6 +186,13 @@ public final class WakeMonitorService extends Service implements RecognitionList
             PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi",msg);
             return speakDirectResponse(msg);
         }
+        if (!ScreenCloudPolicy.allowed(router.mode(),
+            getSharedPreferences("jarvis_settings",MODE_PRIVATE).getBoolean("pandora_screen_cloud_optin",false))) {
+            db.close();
+            String msg="Ekran metnini bulutla analiz etmek için PANDORA Ayarlar bölümünde ekran bulut iznini ayrıca açmalısın.";
+            PandoraAlerts.postImportant(this,"PANDORA · Ekran gizliliği",msg);
+            return speakDirectResponse(msg);
+        }
         PandoraAlerts.postImportant(this,"PANDORA · Ekran analizi","Gördüğüm metni analiz ediyorum. Sonuç bildirimde görünecek.");
         String prompt="Aşağıdaki Android ekranından erişilebilen METNİ Türkçe özetle ve kullanıcının gördüğü haberin anlamını açıkla. "
             +"İddiaları bağımsız doğrulamadan doğrulandı deme. Ekranda olmayanı gördüğünü iddia etme. "
