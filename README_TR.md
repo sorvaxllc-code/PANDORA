@@ -29,3 +29,8 @@ Uygulama menüsündeki **Hey Pandora** düğmesi açık rızayla mikrofon ön pl
 ### PANDORA 11 kurulum notu
 
 Önceki PANDORA TEST debug APK'sı farklı GitHub çalıştırıcılarında farklı anahtarlarla imzalanabilir. PANDORA 11 deneysel sürümü `com.jarvis.kisisel.trial11` olarak **ayrı** kurulacak; kurulu PANDORA/PANDORA TEST verileri kaldırılmamalıdır. Bu bir kalıcı güncelleme çözümü değildir. Sonraki sürümler için sabit, güvenli release imzalama anahtarını GitHub Secrets ile kurmak gerekir. Gizli imzalama anahtarını repoya commit etmeyin.
+
+
+## Guvenli kalici imza altyapisi
+
+Ilerideki stabil surumler icin GitHub'a **kaynak koduna anahtar koymayan** bir imzali APK yolu eklendi. Anahtarlar henuz hazir degil. Aciklama: `SIGNING_TR.md`. Debug ve stabil paketler birbirinden ayri kalir.

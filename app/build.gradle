@@ -26,8 +26,8 @@ android {
             if (signingPath != null && !signingPath.isEmpty()) {
                 storeFile file(signingPath)
                 storePassword System.getenv('PANDORA_KEYSTORE_PASSWORD')
-                keyAlias System.getenv('PANDORA_KEY_ALIAS')
-                keyPassword System.getenv('PANDORA_KEY_PASSWORD')
+                keyAlias 'pandora'
+                keyPassword System.getenv('PANDORA_KEYSTORE_PASSWORD')
             }
         }
     }
@@ -37,6 +37,9 @@ android {
             manifestPlaceholders = [pandoraAppName: 'PANDORA 11']
         }
         release {
+            // Separate, stable ID; old differently signed apps remain untouched.
+            applicationIdSuffix '.stable'
+            manifestPlaceholders = [pandoraAppName: 'PANDORA']
             minifyEnabled false
             if (System.getenv('PANDORA_KEYSTORE_PATH')) {
                 signingConfig signingConfigs.pandoraRelease
