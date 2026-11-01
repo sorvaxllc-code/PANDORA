@@ -1,9 +1,13 @@
-name: PANDORA Android APK
+name: PANDORA Stable
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: pandora-stable-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -31,14 +35,6 @@ jobs:
           gradle-version: '9.6.1'
       - name: Source unit tests
         run: bash tests/RUN_TESTS.sh
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
-      - name: Publish unsigned-for-release test APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: PANDORA-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
       - name: Check permanent signing secrets
         shell: bash
         env:
@@ -46,27 +42,21 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          if [[ -z "$SIGNING_FILE_B64" && -z "$SIGNING_PASSWORD" ]]; then
-            echo 'PANDORA_SIGN_READY=false' >> "$GITHUB_ENV"
-            echo 'Stable signing is not configured; debug APK only.'
-          elif [[ -z "$SIGNING_FILE_B64" || -z "$SIGNING_PASSWORD" ]]; then
-            echo '::error::Configure both signing secrets.'
+          if [[ -z "$SIGNING_FILE_B64" || -z "$SIGNING_PASSWORD" ]]; then
+            echo '::error::PANDORA stable release requires both signing secrets.'
             exit 1
-          else
-            umask 077
-            signing_path="$RUNNER_TEMP/pandora-signing.p12"
-            printf '%s' "$SIGNING_FILE_B64" | base64 -d > "$signing_path"
-            test -s "$signing_path"
-            echo "PANDORA_KEYSTORE_PATH=$signing_path" >> "$GITHUB_ENV"
-            echo 'PANDORA_SIGN_READY=true' >> "$GITHUB_ENV"
           fi
+          umask 077
+          signing_path="$RUNNER_TEMP/pandora-signing.p12"
+          printf '%s' "$SIGNING_FILE_B64" | base64 -d > "$signing_path"
+          test -s "$signing_path"
+          echo "PANDORA_KEYSTORE_PATH=$signing_path" >> "$GITHUB_ENV"
+          echo 'PANDORA_SIGN_READY=true' >> "$GITHUB_ENV"
       - name: Build stable signed APK
-        if: env.PANDORA_SIGN_READY == 'true'
         env:
           PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
       - name: Verify signed APK signature
-        if: env.PANDORA_SIGN_READY == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -74,10 +64,9 @@ jobs:
           test -s "$apk"
           "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
       - name: Upload stable signed APK
-        if: env.PANDORA_SIGN_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: PANDORA-signed-stable-APK
+          name: PANDORA
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
       - name: Erase temporary signing keystore
