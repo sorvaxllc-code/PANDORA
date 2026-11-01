@@ -23,3 +23,7 @@ java -cp /tmp/pandora-parser-test WakeQuickCommandTest
 # Direct wake-command replies are audible without headphones, unless user disables speech or is in a call.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakeVoicePolicy.java tests/WakeVoicePolicyTest.java
 java -cp /tmp/pandora-parser-test WakeVoicePolicyTest
+
+# Shared text, URLs, and data size guard.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/SharedTextGuard.java tests/SharedTextGuardTest.java
+java -cp /tmp/pandora-parser-test SharedTextGuardTest

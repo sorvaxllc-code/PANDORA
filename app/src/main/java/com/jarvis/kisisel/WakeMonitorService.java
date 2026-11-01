@@ -148,9 +148,9 @@ public final class WakeMonitorService extends Service implements RecognitionList
                     response="Seni duydum. Bu isteği arka planda çalıştırmıyorum. Uygulamayı açarak devam et.";
                     break;
             }
+            OverlayPulse.show(this);
             PandoraAlerts.postImportant(this,"PANDORA · Sesli komut",response);
-            // A direct, user-invoked command may speak through the phone speaker.
-            // Proactive alerts keep their separate headset-only policy.
+            // Spoken replies stay headphone-only, as requested by the user.
             return speakDirectResponse(response);
         }
         return false;
