@@ -33,8 +33,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix '.preview'
-            manifestPlaceholders = [pandoraAppName: 'PANDORA TEST']
+            applicationIdSuffix '.trial11'
+            manifestPlaceholders = [pandoraAppName: 'PANDORA 11']
         }
         release {
             minifyEnabled false
