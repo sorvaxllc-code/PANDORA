@@ -262,7 +262,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         PandoraAlerts.postImportant(this,title,"Yanıt hazırlanıyor.");
         final int generation=++modelGeneration;
         try {
-            pendingModel=router.askAsync(prompt,(answer,source)->handler.post(()->{
+            pendingModel=router.askInformationalAsync(prompt,(answer,source)->handler.post(()->{
                 if(stopped || generation!=modelGeneration)return;
                 pendingModel=null;
                 closePendingDatabase();

@@ -39,3 +39,7 @@ java -cp /tmp/pandora-parser-test WakeConversationStateTest
 # Quick Settings tile requires foreground wake service and explicit accessibility permission.
 javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/PandoraTilePolicy.java tests/PandoraTilePolicyTest.java
 java -cp /tmp/pandora-parser-test PandoraTilePolicyTest
+
+# Background screen reviews and spoken Q&A never advertise device actions to the AI.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/ai/ModelIntentPolicy.java tests/ModelIntentPolicyTest.java
+java -cp /tmp/pandora-parser-test ModelIntentPolicyTest
