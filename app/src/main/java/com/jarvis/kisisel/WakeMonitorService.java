@@ -96,7 +96,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         }
         stopped = false;
         try {
-            if (Build.VERSION.SDK_INT >= 29) {
+            if (Build.VERSION.SDK_INT >= 30) {
                 startForeground(2044, PandoraAlerts.wakeNotification(this),
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
             } else {

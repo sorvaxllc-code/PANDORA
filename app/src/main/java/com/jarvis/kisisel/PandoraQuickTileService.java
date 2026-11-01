@@ -1,5 +1,6 @@
 package com.jarvis.kisisel;
 
+import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Build;
@@ -48,10 +49,16 @@ public final class PandoraQuickTileService extends TileService {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
                 startActivityAndCollapse(pending);
             } else {
-                startActivityAndCollapse(intent);
+                launchLegacyTile(intent);
             }
         } catch(RuntimeException ignored) {
             // Some OEMs restrict launching from tiles. Don't claim the action ran.
         }
+    }
+
+    /** PendingIntent overload exists only on Android 14+, so use the older API below 34. */
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    private void launchLegacyTile(Intent intent) {
+        startActivityAndCollapse(intent);
     }
 }
