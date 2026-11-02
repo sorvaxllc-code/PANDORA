@@ -74,6 +74,19 @@ public final class WakeMonitorService extends Service implements RecognitionList
     private MemoryDb pendingDatabase;
     private int modelGeneration = 0;
     private final Runnable retry = this::listenOnce;
+    // Stop hotword detection and TTS promptly when headphones disconnect.
+    private final Runnable headsetSafety = new Runnable(){
+        @Override public void run(){
+            if(stopped)return;
+            if(!PandoraAlerts.headsetConnected(WakeMonitorService.this)){
+                if(recognizer!=null)recognizer.cancel();
+                if(tts!=null)tts.stop();
+                stopSelf();
+                return;
+            }
+            handler.postDelayed(this,350);
+        }
+    };
 
     @Override public void onCreate() {
         super.onCreate();
@@ -82,6 +95,15 @@ public final class WakeMonitorService extends Service implements RecognitionList
             int lang = tts.setLanguage(Locale.forLanguageTag("tr-TR"));
             ttsReady = lang != TextToSpeech.LANG_NOT_SUPPORTED &&
                 lang != TextToSpeech.LANG_MISSING_DATA;
+            if(ttsReady){
+                android.content.SharedPreferences prefs=getSharedPreferences("jarvis_settings",MODE_PRIVATE);
+                tts.setPitch(prefs.getFloat("pandora_voice_pitch",0.85f));
+                tts.setSpeechRate(prefs.getFloat("pandora_voice_rate",0.95f));
+                String preferred=prefs.getString("pandora_voice_name","");
+                if(!preferred.isEmpty() && tts.getVoices()!=null)for(android.speech.tts.Voice v:tts.getVoices()){
+                    if(v!=null&&preferred.equals(v.getName())){tts.setVoice(v);break;}
+                }
+            }
             if (!ttsReady) return;
             tts.setAudioAttributes(new AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -108,6 +130,9 @@ public final class WakeMonitorService extends Service implements RecognitionList
             return START_NOT_STICKY;
         }
         if (running) return START_NOT_STICKY;
+        if(!PandoraAlerts.headsetConnected(this)){
+            stopSelf();return START_NOT_STICKY;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY;
         }
@@ -123,6 +148,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
             stopSelf(); return START_NOT_STICKY;
         }
         running = true;
+        handler.postDelayed(headsetSafety,350);
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             PandoraAlerts.postImportant(this,"PANDORA","Ses tanıma hizmeti bulunamadı; dinleme kapatıldı.");
             stopSelf(); return START_NOT_STICKY;
@@ -136,6 +162,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
     }
     private void listenOnce() {
         if (stopped || recognizer == null || listening || speaking || processingAction) return;
+        if(!PandoraAlerts.headsetConnected(this)){stopSelf();return;}
         try {
             Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
