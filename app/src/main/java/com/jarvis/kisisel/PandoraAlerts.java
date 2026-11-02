@@ -12,7 +12,7 @@ import android.media.AudioManager;
 import android.os.Build;
 
 public final class PandoraAlerts {
-    public static final String ALERT_CHANNEL = "pandora_important_v1";
+    public static final String ALERT_CHANNEL = "pandora_important_silent_v20";
     public static final String MONITOR_CHANNEL = "pandora_wake_monitor_v1";
     private PandoraAlerts() {}
 
@@ -21,7 +21,9 @@ public final class PandoraAlerts {
         if (manager == null) return;
         NotificationChannel urgent = new NotificationChannel(ALERT_CHANNEL,
                 "PANDORA önemli uyarılar", NotificationManager.IMPORTANCE_HIGH);
-        urgent.setDescription("Kullanıcının izin verdiği önemli olay ve test uyarıları.");
+        urgent.setDescription("Kulaklıksız sessiz, görsel önemli uyarılar.");
+        urgent.setSound(null,null);
+        urgent.enableVibration(false);
         manager.createNotificationChannel(urgent);
         NotificationChannel monitor = new NotificationChannel(MONITOR_CHANNEL,
                 "PANDORA sesli uyandırma", NotificationManager.IMPORTANCE_LOW);
