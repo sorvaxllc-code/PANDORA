@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
             if(result == TextToSpeech.SUCCESS && speech != null) {
                 int lang = speech.setLanguage(Locale.forLanguageTag("tr-TR"));
                 ttsReady = lang != TextToSpeech.LANG_MISSING_DATA && lang != TextToSpeech.LANG_NOT_SUPPORTED;
+                if(ttsReady) setPreferredVoice();
             }
         });
         if(!prefs.contains("pandora_mode")) modelRouter.setMode("HERMES");
@@ -525,6 +526,87 @@ public class MainActivity extends Activity {
                         ReminderReceiver.cancel(this,r.id);memory.removeReminder(r.id);reply("Hatırlatıcı silindi.");}).show();})
             .setNegativeButton("Kapat",null).show();
     }
+    private final android.os.Handler audioGuard = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable guardAudio = new Runnable() {
+        @Override public void run(){
+            if(speech!=null && (!PandoraAlerts.headsetConnected(MainActivity.this)
+                   || PandoraAlerts.inCall(MainActivity.this)))speech.stop();
+            audioGuard.postDelayed(this,250);
+        }
+    };
+    private void enableHeadsetAudioGuard(){audioGuard.postDelayed(guardAudio,250);}
+    @Override protected void onResume(){
+        super.onResume();
+        if(speech!=null&&!PandoraAlerts.headsetConnected(this))speech.stop();
+    }
+    private void editHermesKey(){
+        EditText key=new EditText(this);
+        key.setSingleLine(true);key.setHint("Hermes API_SERVER_KEY");
+        key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        key.setPadding(dp(20),dp(12),dp(20),dp(12));
+        new AlertDialog.Builder(this).setTitle("Hermes • Yerel Gateway")
+          .setMessage("Adres: http://127.0.0.1:8642\n\nTermux ~/.hermes/.env dosyasındaki API_SERVER_KEY değerini buraya yapıştır. Anahtar Android Keystore ile şifrelenir. Paylaşma.")
+          .setView(key).setNegativeButton("Kapat",null)
+          .setNeutralButton("Anahtarı sil",(d,w)->{
+              com.jarvis.kisisel.ai.HermesVault.clear(this);
+              reply("Hermes API anahtarı silindi.");
+          })
+          .setPositiveButton("Kaydet",(d,w)->{
+              String value=key.getText().toString().trim();
+              if(value.length()<32||value.contains(" ")||value.contains("\n")){
+                  reply("Anahtar geçersiz: en az 32 karakter olmalı.");return;
+              }
+              if(com.jarvis.kisisel.ai.HermesVault.put(this,value)){
+                  modelRouter.setMode("HERMES");
+                  showStatus("HERMES · BAĞLANDI");
+                  reply("Hermes anahtarı güvenle kaydedildi. Gateway Termux'ta çalışıyorsa sohbet edebilirsin.");
+              }else reply("Anahtar şifrelenemedi.");
+          }).show();
+    }
+    private void chooseVoice(){
+        if(speech==null || !ttsReady){reply("Türkçe ses motoru hazır değil.");return;}
+        java.util.ArrayList<android.speech.tts.Voice> turkish=new java.util.ArrayList<>();
+        java.util.Set<android.speech.tts.Voice> voices=speech.getVoices();
+        if(voices!=null)for(android.speech.tts.Voice v:voices){
+            if(v!=null&&v.getLocale()!=null&&"tr".equals(v.getLocale().getLanguage()))turkish.add(v);
+        }
+        if(turkish.isEmpty()){reply("Türkçe ses bulunamadı. Android metin okuma motorunu yüklemeyi deneyebilirsin.");return;}
+        java.util.Collections.sort(turkish,(a,b)->a.getName().compareTo(b.getName()));
+        String[] choices=new String[turkish.size()];
+        for(int i=0;i<turkish.size();i++){
+            android.speech.tts.Voice v=turkish.get(i);
+            choices[i]=v.getName()+(v.isNetworkConnectionRequired()?" • internet":" • cihaz");
+        }
+        new AlertDialog.Builder(this).setTitle("Türkçe ses seç")
+         .setMessage("Telefonun sağladığı sesler listelenir. Erkek sesi mevcutsa seçebilirsin. Ses testleri yalnızca kulaklıktan oynatılır.")
+         .setItems(choices,(d,index)->{
+             String name=turkish.get(index).getName();
+             int result=speech.setVoice(turkish.get(index));
+             if(result==TextToSpeech.SUCCESS){
+                 prefs.edit().putString("pandora_voice_name",name).apply();
+                 speech.setPitch(prefs.getFloat("pandora_voice_pitch",0.85f));
+                 reply("Ses tercihi kaydedildi: "+name);
+             }else reply("Seçilen ses kullanılamıyor.");
+         }).setNegativeButton("Kapat",null).show();
+    }
+    private void setPreferredVoice(){
+        if(speech==null||!ttsReady)return;
+        String selected=prefs.getString("pandora_voice_name","");
+        java.util.Set<android.speech.tts.Voice> voices=speech.getVoices();
+        if(voices!=null){
+           android.speech.tts.Voice maleCandidate=null;
+           for(android.speech.tts.Voice v:voices){
+               if(v==null||v.getLocale()==null||!"tr".equals(v.getLocale().getLanguage()))continue;
+               if(v.getName().equals(selected)){speech.setVoice(v);maleCandidate=null;break;}
+               String s=v.getName().toLowerCase(java.util.Locale.ROOT);
+               if(maleCandidate==null&&(s.contains("male")||s.contains("ahmet")||s.contains("emre")))maleCandidate=v;
+           }
+           if(selected.isEmpty()&&maleCandidate!=null)speech.setVoice(maleCandidate);
+        }
+        speech.setPitch(prefs.getFloat("pandora_voice_pitch",0.85f));
+        speech.setSpeechRate(prefs.getFloat("pandora_voice_rate",0.95f));
+    }
+    
     private void showSettings() {
         String[] options={
             voiceEnabled?"Sesli yanıt: AÇIK":"Sesli yanıt: KAPALI",
@@ -538,7 +620,10 @@ public class MainActivity extends Activity {
             "Hatırlatıcılar",
             "Konuşma geçmişini sil",
             "Gizlilik ve sınırlamalar",
-            "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI")
+            "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI"),
+            "Hermes API anahtarı / bağlantısı",
+            "Türkçe ses seç / erkek sesi varsa seç",
+            "Ses tonu: "+prefs.getFloat("pandora_voice_pitch",0.85f)+" (kulaklıkla)"
         };
         new AlertDialog.Builder(this).setTitle("PANDORA · AYARLAR").setItems(options,(d,which)->{
             switch(which){
@@ -561,6 +646,16 @@ public class MainActivity extends Activity {
                         memory.clearMessages();feed.removeAllViews();reply("Konuşma geçmişi silindi.");
                     }).show();break;
                 case 11:toggleScreenCloudConsent();break;
+                case 12:editHermesKey();break;
+                case 13:chooseVoice();break;
+                case 14:
+                    final String[] tones={"Daha tok (0.75)","Tok / doğal (0.85)","Normal (1.00)"};
+                    final float[] pitches={0.75f,0.85f,1.00f};
+                    new AlertDialog.Builder(this).setTitle("Ses tonu").setItems(tones,(dd,i)->{
+                        prefs.edit().putFloat("pandora_voice_pitch",pitches[i]).apply();
+                        if(speech!=null) speech.setPitch(pitches[i]);
+                        reply("Ses tonu kaydedildi. Ses yalnızca kulaklık bağlıyken çıkacak.");
+                    }).show();break;
                 case 10:new AlertDialog.Builder(this).setTitle("Gizlilik / sınırlar")
                     .setMessage("Hazır komutlar cihazda çalışır. Yerel mod 127.0.0.1:8080'e bağlanır. Bulut/Otomatik modlarını kendin seçtiğinde mesajların OpenRouter'ın bulut sağlayıcılarına iletilir. Notlar ve geçmiş varsayılan olarak buluta gönderilmez. Anahtar Android Keystore ile şifrelenir ancak telefona yüklü uygulamanın kullanıcı anahtarı kullanımı tamamen risksiz değildir. Bulut ücretsiz istek kotasına tabidir; model otomatik olarak ücretli modele geçmez. 8B yerel model bu telefonda yavaştır. Ses tanıma servisi ayrı internete bağlanabilir. Kesintisiz dinleme, WhatsApp görüşmesi kapatma, Binance hesabı, antivirüs, otomatik video yayınlama henüz yoktur.")
                     .setPositiveButton("Tamam",null).show();break;
@@ -586,12 +681,15 @@ public class MainActivity extends Activity {
     }
 
     private void chooseMode() {
-        String[] labels={"Yalnızca hazır komutlar", "Yerel (Termux:8080)", "Bulut (OpenRouter ücretsiz)", "Otomatik (önce bulut, sonra yerel)"};
-        String[] values={"OFF","LOCAL","CLOUD","AUTO"};
+        String[] labels={"Hermes Agent (Termux:8642)", "Yalnızca hazır komutlar", "Yerel (Termux:8080)", "Bulut (OpenRouter ücretsiz)", "Otomatik (önce bulut, sonra yerel)"};
+        String[] values={"HERMES","OFF","LOCAL","CLOUD","AUTO"};
         new AlertDialog.Builder(this).setTitle("Çalışma modu")
             .setSingleChoiceItems(labels,java.util.Arrays.asList(values).indexOf(modelRouter.mode()),(d,which)->{
                 d.dismiss();
                 String chosen=values[which];
+                if("HERMES".equals(chosen)&&!com.jarvis.kisisel.ai.HermesVault.exists(this)){
+                    editHermesKey();return;
+                }
                 if(("CLOUD".equals(chosen)||"AUTO".equals(chosen)) && !SecretVault.exists(this)){
                     new AlertDialog.Builder(this).setTitle("Önce ücretsiz bulut anahtarını ekle")
                         .setMessage("Bulut seçeneği için ücretsiz bir OpenRouter hesabı ve API anahtarı gerekiyor. Anahtarı buradaki sohbetimize gönderme. PANDORA Ayarlar içinde saklayacağız. Ücretli model çağrıları kapalıdır.")
@@ -934,6 +1032,7 @@ public class MainActivity extends Activity {
     private void openUrl(String url) {launch(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));}
     @Override protected void onDestroy() {
         cancelModelRequest(false);
+        audioGuard.removeCallbacks(guardAudio);
         if(speech!=null){speech.stop();speech.shutdown();}
         if(memory!=null)memory.close();
         super.onDestroy();
