@@ -11,7 +11,10 @@ import java.util.Locale;
 /** Reads a Quick Settings analysis result only on headphones; notifications always work. */
 public final class PandoraHeadphoneReply {
     private PandoraHeadphoneReply() {}
+    private static Runnable activeClose;
+    public static void stop(){if(activeClose!=null){Runnable close=activeClose;activeClose=null;close.run();}}
     public static void say(Context context,String response) {
+        stop();
         Context app=context.getApplicationContext();
         if(!app.getSharedPreferences("jarvis_settings",Context.MODE_PRIVATE).getBoolean("voice",true)
             || !PandoraAlerts.headsetConnected(app) || PandoraAlerts.inCall(app))return;
@@ -26,6 +29,7 @@ public final class PandoraHeadphoneReply {
                 || !PandoraAlerts.headsetConnected(app) || PandoraAlerts.inCall(app)) {
                 tts.shutdown(); return;
             }
+            SpeechPreferences.apply(app,tts);
             tts.setAudioAttributes(new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -39,6 +43,7 @@ public final class PandoraHeadphoneReply {
                 tts.stop();
                 tts.shutdown();
             };
+            activeClose=close;
             watch[0]=new Runnable() {
                 @Override public void run() {
                     if(ended[0])return;
@@ -57,7 +62,7 @@ public final class PandoraHeadphoneReply {
                 @Override public void onError(String id) { main.post(close); }
             });
             String spoken=response.length()>375
-                ?response.substring(0,365)+"... Devamı bildirimde."
+                ?response.substring(0,365)+"... Devamı sohbet geçmişinde."
                 :response;
             if(tts.speak(spoken,TextToSpeech.QUEUE_FLUSH,null,"pandora-tile")
                     !=TextToSpeech.SUCCESS) {

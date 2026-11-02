@@ -105,15 +105,11 @@ public class MainActivity extends Activity {
             if(result == TextToSpeech.SUCCESS && speech != null) {
                 int lang = speech.setLanguage(Locale.forLanguageTag("tr-TR"));
                 ttsReady = lang != TextToSpeech.LANG_MISSING_DATA && lang != TextToSpeech.LANG_NOT_SUPPORTED;
-                if(ttsReady) setPreferredVoice();
+                setPreferredVoice();
             }
         });
-        if(!prefs.contains("pandora_mode")) modelRouter.setMode("HERMES");
         buildUi();
-        enableHeadsetAudioGuard();
-        List<String[]> history = memory.messages();
-        if(history.isEmpty()) addBubble(false, "Merhaba! Ben PANDORA. Sesli konuşmak için mikrofonu kullanabilir veya aşağıdaki komutlardan başlayabilirsin. Komutlar ücretsiz ve yerel çalışır.", false);
-        else for (String[] m : history) addBubble("user".equals(m[0]), m[1], false);
+        refreshHistory();
         showStatus("HAZIR · " + modelRouter.modeLabel());
         getWindow().getDecorView().post(() -> {
             handleSharedText(getIntent());
@@ -196,100 +192,91 @@ public class MainActivity extends Activity {
     }
     private LinearLayout.LayoutParams lp(int w, int h) { return new LinearLayout.LayoutParams(w,h); }
     private void buildUi() {
-        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(BG);page.setPadding(dp(17),dp(10),dp(17),dp(8));setContentView(page);
+        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(BG);
+        page.setPadding(dp(20),dp(12),dp(20),dp(12));setContentView(page);
         LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
-        Button menu=roundButton("☰",0xFF101010);menu.setContentDescription("Menüyü aç");
-        heading.addView(menu,lp(dp(45),dp(48)));menu.setOnClickListener(v->showNavigation());
-        TextView brand=text("P A N D O R A",16,Color.WHITE,true);brand.setGravity(Gravity.CENTER);
-        heading.addView(brand,new LinearLayout.LayoutParams(0,dp(50),1));
-        Button newChat=roundButton("✎",0xFF101010);newChat.setContentDescription("Yeni sohbet");
-        heading.addView(newChat,lp(dp(45),dp(48)));
-        newChat.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Yeni sohbet")
-          .setMessage("Mevcut geçmiş saklansın, yeni konuşma başlatılsın mı?")
-          .setNegativeButton("Vazgeç",null).setPositiveButton("Yeni sohbet",(d,w)->{
-              if(modelBusy)cancelModelRequest(false);
-              feed.removeAllViews();memory.clearMessages();
-              reply("Yeni konuşma hazır. Nasıl yardımcı olabilirim?");
-          }).show());
-        page.addView(heading);
-        TextView headset=text("◉  SES YALNIZCA KULAKLIKLA",11,MUTED,false);
-        headset.setGravity(Gravity.CENTER);
-        page.addView(headset,lp(-1,dp(30)));
-        TextView welcome=text("Aklındaki ne?",25,Color.WHITE,false);
-        welcome.setTypeface(Typeface.create("serif",Typeface.NORMAL));
-        welcome.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams wel=lp(-1,dp(49));wel.topMargin=dp(11);page.addView(welcome,wel);
-        orb=new OrbView(this);
-        LinearLayout.LayoutParams orbParams=lp(-1,dp(135));orbParams.topMargin=dp(4);
-        page.addView(orb,orbParams);
-        status=text("",11,MUTED,false);status.setGravity(Gravity.CENTER);
-        page.addView(status,lp(-1,dp(29)));
-        modeBadge=text("HERMES · YEREL BAĞLANTI",11,0xFFCCCCCC,false);
-        modeBadge.setGravity(Gravity.CENTER);
-        page.addView(modeBadge,lp(-1,dp(25)));
+        Button menu=roundButton("☰",BG);menu.setContentDescription("Menü ve ayarlar");
+        menu.setOnClickListener(v->showNavigation());heading.addView(menu,lp(dp(48),dp(48)));
+        TextView brand=text("P A N D O R A",18,Color.WHITE,false);brand.setGravity(Gravity.CENTER);
+        heading.addView(brand,new LinearLayout.LayoutParams(0,dp(52),1));
+        Button history=roundButton("◷",BG);history.setContentDescription("Konuşma geçmişi");
+        history.setOnClickListener(v->startActivity(new Intent(this,HistoryActivity.class)));heading.addView(history,lp(dp(48),dp(48)));page.addView(heading);
+        status=text("",11,MUTED,false);status.setGravity(Gravity.CENTER);page.addView(status,lp(-1,dp(30)));
         scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
-        feed=new LinearLayout(this);feed.setOrientation(LinearLayout.VERTICAL);
-        feed.setPadding(dp(0),dp(8),dp(0),dp(10));scroll.addView(feed);
+        feed=new LinearLayout(this);feed.setOrientation(LinearLayout.VERTICAL);feed.setPadding(0,dp(20),0,dp(24));scroll.addView(feed);
         page.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        orb=new OrbView(this); // Shared visual language for the welcome and voice states.
         LinearLayout composer=new LinearLayout(this);composer.setGravity(Gravity.CENTER_VERTICAL);
-        composer.setPadding(dp(5),dp(4),dp(5),dp(4));
-        composer.setBackground(outline(0xFF1B1B1B,26));
-        Button plus=roundButton("+",0xFF1B1B1B);plus.setContentDescription("Araçlar ve menü");
-        composer.addView(plus,lp(dp(40),dp(48)));plus.setOnClickListener(v->showNavigation());
-        input=new EditText(this);input.setTextSize(15);input.setTextColor(Color.WHITE);
-        input.setSingleLine(false);input.setMinLines(1);input.setMaxLines(4);
-        input.setHintTextColor(0xFF999999);input.setHint("Pandora'ya yaz");
-        input.setBackgroundColor(Color.TRANSPARENT);
-        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        input.setPadding(dp(8),dp(7),dp(5),dp(7));
-        composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
-        Button mic=roundButton("🎙",0xFF222222);
-        mic.setContentDescription("Kulaklıkla sesli konuş");
-        composer.addView(mic,lp(dp(48),dp(48)));mic.setOnClickListener(v->listen());
-        stopButton=roundButton("■",0xFF323232);stopButton.setContentDescription("İsteği durdur");
-        stopButton.setVisibility(View.GONE);stopButton.setOnClickListener(v->cancelModelRequest(true));
-        composer.addView(stopButton,lp(dp(45),dp(48)));
-        Button send=roundButton("➤",0xFFECECEC);send.setTextColor(0xFF111111);send.setContentDescription("Gönder");
-        composer.addView(send,lp(dp(46),dp(48)));send.setOnClickListener(v->submit());
-        page.addView(composer);
-        TextView foot=text("HERMES  •  GÜVENLİ YEREL ARAYÜZ",10,0xFF888888,false);
-        foot.setGravity(Gravity.CENTER);page.addView(foot,lp(-1,dp(29)));
+        composer.setPadding(dp(8),dp(5),dp(8),dp(5));composer.setBackground(outline(0xFF171717,30));
+        input=new EditText(this);input.setTextSize(16);input.setTextColor(Color.WHITE);input.setMaxLines(4);
+        input.setHintTextColor(0xFF999999);input.setHint("Pandora’ya yaz");input.setBackgroundColor(Color.TRANSPARENT);
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES|InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        input.setPadding(dp(14),dp(12),dp(6),dp(12));composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
+        Button mic=roundButton("◉",Color.TRANSPARENT);mic.setContentDescription("Sesli komut");mic.setOnClickListener(v->listen());composer.addView(mic,lp(dp(48),dp(48)));
+        stopButton=roundButton("■",Color.TRANSPARENT);stopButton.setContentDescription("Yanıtı durdur");stopButton.setVisibility(View.GONE);
+        stopButton.setOnClickListener(v->cancelModelRequest(true));composer.addView(stopButton,lp(dp(48),dp(48)));
+        Button send=roundButton("↑",0xFFF2F2F2);send.setTextColor(BG);send.setContentDescription("Gönder");send.setOnClickListener(v->submit());
+        composer.addView(send,lp(dp(44),dp(44)));page.addView(composer);
     }
     private void showNavigation() {
-        final String[] choices={
-            "✦  Hey Pandora • Kulaklıkla dinle",
-            "◷  Hatırlatıcı oluştur", "▣  Notlar", "＋  Not al",
-            "⌕  Ekranı yorumla", "◈  Ekran erişimi izni",
-            "◈  Hızlı erişim kutucuğu", "✧  Görüşmeyi görüntülüye aktar (deneme)",
-            "☼  Önemli bildirim denemesi", "▤  Sistem durumu",
-            "◉  Model seçimi", "◆  Hermes API anahtarı",
-            "⚙  Ses ve genel ayarlar", "☰  Komutlar",
-            "⇧  Notların yedeğini paylaş","◇  Ajan ve modüller"
-        };
-        new AlertDialog.Builder(this).setTitle("PANDORA · MENÜ")
-         .setItems(choices,(dialog,which)->{
-           switch(which) {
-             case 0: toggleWakeMonitor();break;
-             case 1: promptReminder(null);break;
-             case 2: showNotes();break;
-             case 3: promptNote();break;
-             case 4: showQuickTileSetup();break;
-             case 5: openScreenAccessibilitySettings();break;
-             case 6: showQuickTileSetup();break;
-             case 7: reply(PandoraAccessibilityService.requestWhatsAppVideoSwitch());break;
-             case 8: testImportantAlert();break;
-             case 9: showSystemReadiness();break;
-             case 10: chooseMode();break;
-             case 11: editHermesKey();break;
-             case 12: showSettings();break;
-             case 13: reply(help());break;
-             case 14: shareNotesBackup();break;
-             case 15: new AlertDialog.Builder(this).setTitle("PANDORA · Modüller")
-                  .setMessage(skillRegistry.describe()+"\n\nKritik işlemler açık kullanıcı onayı gerektirir. Kripto alım-satımı kapalıdır.")
-                  .setPositiveButton("Tamam",null).show();break;
-           }
-         }).setNegativeButton("Kapat",null).show();
+        String[] items={"Sohbet geçmişi","Notlar","Hatırlatıcılar","Sesle uyandırma","Ekran erişimi","Etkinleşme simgesi","Yapay zekâ ve bağlantılar","Ayarlar","Sistem durumu","Görsel analiz izni","Hermes bağlantısı","Türkçe ses seç","Yeni sohbet"};
+        new AlertDialog.Builder(this).setTitle("PANDORA").setItems(items,(d,which)->{
+            switch(which) {
+                case 0: startActivity(new Intent(this,HistoryActivity.class));break;
+                case 1: showNotes();break;
+                case 2: showReminders();break;
+                case 3: toggleWakeMonitor();break;
+                case 4: openScreenAccessibilitySettings();break;
+                case 5: showOrAuthorizeOverlay();break;
+                case 6: chooseMode();break;
+                case 7: showSettings();break;
+                case 8: showSystemReadiness();break;
+                case 9: configureVision();break;
+                case 10: showHermesConnection();break;
+                case 11: chooseVoice();break;
+                case 12: newConversation();break;
+            }
+        }).show();
+    }
+    private void newConversation(){
+        if(modelBusy || WakeMonitorService.isBusy()){
+            Toast.makeText(this,"Önce süren yanıtı veya sesli işlemi tamamla ya da durdur.",Toast.LENGTH_LONG).show();return;
+        }
+        memory.newConversation();refreshHistory();showStatus("YENİ SOHBET · "+modelRouter.modeLabel());
+    }
+    private void showHermesConnection(){
+        new AlertDialog.Builder(this).setTitle("Hermes bağlantısı")
+          .setMessage("127.0.0.1:8642 · Termux Gateway\nAnahtar: "+(com.jarvis.kisisel.ai.HermesVault.exists(this)?"kayıtlı":"girilmemiş")+"\nAnahtarın kayıtlı olması bağlantının çalıştığını göstermez.")
+          .setNeutralButton("Anahtarı düzenle",(d,w)->editHermesKey())
+          .setPositiveButton("Bağlantıyı kontrol et",(d,w)->{
+              showStatus("HERMES KONTROL EDİLİYOR");
+              new Thread(()->{String result=com.jarvis.kisisel.ai.HermesHealth.check(this);
+                  runOnUiThread(()->{if(isDestroyed()||isFinishing())return;showStatus("HAZIR · "+modelRouter.modeLabel());
+                      new AlertDialog.Builder(this).setTitle("Hermes bağlantı sonucu").setMessage(result).setPositiveButton("Tamam",null).show();});
+              },"hermes-health").start();
+          }).setNegativeButton("Kapat",null).show();
+    }
+    private void configureVision(){
+        boolean enabled=prefs.getBoolean("pandora_screen_image_optin",false);
+        new AlertDialog.Builder(this).setTitle("Görsel ekran analizi")
+            .setMessage("Ekrana bak dediğinde görünen ekran görüntüsü seçili Hermes veya OpenRouter bağlantısına gönderilir. Hermes, yapılandırılmış model sağlayıcısını kullanabilir. Görsel destek sağlayıcıya bağlıdır. Görüntü özel mesajları da içerebilir. Ekran görüntüsü cihazda saklanmaz; açıklama sohbet geçmişine kaydedilir. Şu an: "+(enabled?"açık":"kapalı"))
+            .setNegativeButton("Kapat",(dialog,which)->prefs.edit().putBoolean("pandora_screen_image_optin",false).apply())
+            .setPositiveButton("İzin ver",(dialog,which)->prefs.edit().putBoolean("pandora_screen_image_optin",true).apply()).show();
+    }
+    private void refreshHistory() {
+        feed.removeAllViews();
+        List<String[]> history=memory.messages();
+        if(history.isEmpty()) {
+            TextView greeting=text("İyi günler, Mehmet.\nAklındaki ne?",30,Color.WHITE,false);
+            greeting.setTypeface(Typeface.create("serif",Typeface.NORMAL));greeting.setGravity(Gravity.CENTER);
+            greeting.setPadding(0,dp(60),0,dp(24));feed.addView(greeting,lp(-1,-2));
+            if(orb.getParent()!=null)((android.view.ViewGroup)orb.getParent()).removeView(orb);
+            feed.addView(orb,lp(-1,dp(200)));
+        } else for(String[] message:history)addBubble("user".equals(message[0]),message[1],false);
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        if(memory!=null && feed!=null)refreshHistory();
     }
     private Button roundButton(String text,int color) {
         Button b=new Button(this);b.setText(text);b.setTextColor(Color.WHITE);b.setTextSize(18);b.setAllCaps(false);
@@ -301,9 +288,11 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p=lp(-2,-2);p.rightMargin=dp(8);bar.addView(b,p);b.setOnClickListener(v->click.run());
     }
     private void addBubble(boolean user,String value,boolean save) {
-        TextView bubble=text(value,14,user?Color.WHITE:0xFFE6E6E6,false);
+        if(save && memory.messages().isEmpty())feed.removeAllViews();
+        TextView bubble=text(value,16,user?Color.WHITE:0xFFE6E6E6,false);
         bubble.setTextIsSelectable(true);bubble.setPadding(dp(13),dp(11),dp(13),dp(11));
-        bubble.setBackground(outline(user?0xFF383838:CARD,15));
+        if(user)bubble.setBackground(background(0xFF292929,22));
+        else bubble.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout.LayoutParams p=lp(-2,-2);p.gravity=user?Gravity.END:Gravity.START;
         p.topMargin=dp(7);p.bottomMargin=dp(4);
         bubble.setMaxWidth((int)(getResources().getDisplayMetrics().widthPixels*.84)); feed.addView(bubble,p);
@@ -311,7 +300,7 @@ public class MainActivity extends Activity {
         scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));
     }
     private void showStatus(String value) { status.setText(value); if(modeBadge!=null)modeBadge.setText("● PANDORA " + modelRouter.modeLabel()); }
-    private void reply(String value) { addBubble(false,value,true); if(voiceEnabled && ttsReady && PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this)) speech.speak(value,TextToSpeech.QUEUE_FLUSH,null,"pandora"); }
+    private void reply(String value) { addBubble(false,value,true); if(voiceEnabled)PandoraHeadphoneReply.say(this,value); }
     private void submit() {
         String str=input.getText().toString().trim();if(str.isEmpty())return;
         input.setText("");
@@ -335,6 +324,8 @@ public class MainActivity extends Activity {
             command=withoutWake.trim();
             q=command.toLowerCase(new Locale("tr","TR"));
         }
+        String taskResult=DeviceTaskRouter.tryHandle(this,command);
+        if(taskResult!=null){reply(taskResult);return;}
         if(skillRegistry.tryHandle(this,q,this::reply)) return;
         if (q.contains("ekrana bak") || q.contains("ekranı analiz") ||
             q.contains("bu haber ne demek") || q.contains("şu haber ne demek")) {
@@ -394,10 +385,10 @@ public class MainActivity extends Activity {
         if(ConversationIntent.isOnlyGreeting(q)) {reply("Merhaba! Buradayım. Nasıl yardımcı olabilirim?");return;}
         if(q.contains("adın ne")||q.contains("sen kimsin")) {reply("Ben PANDORA. Telefonunda çalışan, komutlarını uygulayan ücretsiz kişisel asistanım.");return;}
         if(!"OFF".equals(modelRouter.mode())){askModel(command);return;}
-        reply("Şu an KOMUT modundayım. Üstteki ‘◉ Yapay zekâ’ düğmesine dokunup ‘Yerel (Termux:8080)’ seçersen doğal sohbeti deneyebiliriz. Termux sunucusu çalışmalıdır. Bulut modunda ayrı API anahtarı gerekir.");
+        reply("Şu an KOMUT modundayım. Menüden Yapay zekâ ve bağlantılar bölümüne girip ‘Yerel (Termux:8080)’ seçersen doğal sohbeti deneyebiliriz. Termux sunucusu çalışmalıdır. Bulut modunda ayrı API anahtarı gerekir.");
     }
     private String help() {
-        return "Örnek komutlar:\n• Not al yarın alışveriş yapacağım\n• Notlarımı göster\n• Hatırlat su iç\n• İnternette ara bilim haberleri\n• YouTube'da ara teknoloji\n• Kamera aç / Ayarlar aç\n• Saat kaç / Tarih\n• Hesapla 24*3\n\nMikrofona dokunarak sesli söyleyebilirsin. Serbest sohbet için Ayarlar bölümünden yerel büyük modeli aç. Model, Termux ile bağlantı kurar.";
+        return "Örnek komutlar:\n• Not al yarın alışveriş yapacağım\n• Notlarımı göster\n• Hatırlat su iç\n• İnternette ara bilim haberleri\n• YouTube'da ara teknoloji\n• Kamera aç / Ayarlar aç\n• Saat kaç / Tarih\n• Hesapla 24*3\n\nMikrofona dokunarak sesli söyleyebilirsin. Serbest sohbet için Menü → Yapay zekâ ve bağlantılar bölümünden Bulut veya Yerel modu seç. Hey Pandora ile uygulama dışında da seslenebilirsin.";
     }
     /** Real completion test. Unlike CloudKeyCheck, this consumes a free provider request. */
     private void confirmCloudConversationTest() {
@@ -526,19 +517,6 @@ public class MainActivity extends Activity {
                         ReminderReceiver.cancel(this,r.id);memory.removeReminder(r.id);reply("Hatırlatıcı silindi.");}).show();})
             .setNegativeButton("Kapat",null).show();
     }
-    private final android.os.Handler audioGuard = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable guardAudio = new Runnable() {
-        @Override public void run(){
-            if(speech!=null && (!PandoraAlerts.headsetConnected(MainActivity.this)
-                   || PandoraAlerts.inCall(MainActivity.this)))speech.stop();
-            audioGuard.postDelayed(this,250);
-        }
-    };
-    private void enableHeadsetAudioGuard(){audioGuard.postDelayed(guardAudio,250);}
-    @Override protected void onResume(){
-        super.onResume();
-        if(speech!=null&&!PandoraAlerts.headsetConnected(this))speech.stop();
-    }
     private void editHermesKey(){
         EditText key=new EditText(this);
         key.setSingleLine(true);key.setHint("Hermes API_SERVER_KEY");
@@ -553,12 +531,12 @@ public class MainActivity extends Activity {
           })
           .setPositiveButton("Kaydet",(d,w)->{
               String value=key.getText().toString().trim();
-              if(value.length()<32||value.contains(" ")||value.contains("\n")){
-                  reply("Anahtar geçersiz: en az 32 karakter olmalı.");return;
+              if(value.length()<1||value.length()>4096||value.contains(" ")||value.contains("\n")||value.contains("\r")){
+                  reply("Geçerli Hermes API anahtarını gir.");return;
               }
               if(com.jarvis.kisisel.ai.HermesVault.put(this,value)){
                   modelRouter.setMode("HERMES");
-                  showStatus("HERMES · BAĞLANDI");
+                  showStatus("HERMES · ANAHTAR KAYITLI");
                   reply("Hermes anahtarı güvenle kaydedildi. Gateway Termux'ta çalışıyorsa sohbet edebilirsin.");
               }else reply("Anahtar şifrelenemedi.");
           }).show();
@@ -589,24 +567,8 @@ public class MainActivity extends Activity {
              }else reply("Seçilen ses kullanılamıyor.");
          }).setNegativeButton("Kapat",null).show();
     }
-    private void setPreferredVoice(){
-        if(speech==null||!ttsReady)return;
-        String selected=prefs.getString("pandora_voice_name","");
-        java.util.Set<android.speech.tts.Voice> voices=speech.getVoices();
-        if(voices!=null){
-           android.speech.tts.Voice maleCandidate=null;
-           for(android.speech.tts.Voice v:voices){
-               if(v==null||v.getLocale()==null||!"tr".equals(v.getLocale().getLanguage()))continue;
-               if(v.getName().equals(selected)){speech.setVoice(v);maleCandidate=null;break;}
-               String s=v.getName().toLowerCase(java.util.Locale.ROOT);
-               if(maleCandidate==null&&(s.contains("male")||s.contains("ahmet")||s.contains("emre")))maleCandidate=v;
-           }
-           if(selected.isEmpty()&&maleCandidate!=null)speech.setVoice(maleCandidate);
-        }
-        speech.setPitch(prefs.getFloat("pandora_voice_pitch",0.85f));
-        speech.setSpeechRate(prefs.getFloat("pandora_voice_rate",0.95f));
-    }
-    
+    private void setPreferredVoice(){if(speech!=null&&ttsReady)SpeechPreferences.apply(this,speech);}
+
     private void showSettings() {
         String[] options={
             voiceEnabled?"Sesli yanıt: AÇIK":"Sesli yanıt: KAPALI",
@@ -620,10 +582,8 @@ public class MainActivity extends Activity {
             "Hatırlatıcılar",
             "Konuşma geçmişini sil",
             "Gizlilik ve sınırlamalar",
-            "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI"),
-            "Hermes API anahtarı / bağlantısı",
-            "Türkçe ses seç / erkek sesi varsa seç",
-            "Ses tonu: "+prefs.getFloat("pandora_voice_pitch",0.85f)+" (kulaklıkla)"
+            "Görsel ekran analizi: " + (prefs.getBoolean("pandora_screen_image_optin",false)?"AÇIK":"KAPALI"),
+            "Hermes bağlantısı", "Türkçe ses seç", "Ses tonu"
         };
         new AlertDialog.Builder(this).setTitle("PANDORA · AYARLAR").setItems(options,(d,which)->{
             switch(which){
@@ -645,19 +605,14 @@ public class MainActivity extends Activity {
                     .setNegativeButton("İptal",null).setPositiveButton("Sil",(dd,w)->{
                         memory.clearMessages();feed.removeAllViews();reply("Konuşma geçmişi silindi.");
                     }).show();break;
-                case 11:toggleScreenCloudConsent();break;
-                case 12:editHermesKey();break;
+                case 11:configureVision();break;
+                case 12:showHermesConnection();break;
                 case 13:chooseVoice();break;
-                case 14:
-                    final String[] tones={"Daha tok (0.75)","Tok / doğal (0.85)","Normal (1.00)"};
-                    final float[] pitches={0.75f,0.85f,1.00f};
-                    new AlertDialog.Builder(this).setTitle("Ses tonu").setItems(tones,(dd,i)->{
-                        prefs.edit().putFloat("pandora_voice_pitch",pitches[i]).apply();
-                        if(speech!=null) speech.setPitch(pitches[i]);
-                        reply("Ses tonu kaydedildi. Ses yalnızca kulaklık bağlıyken çıkacak.");
-                    }).show();break;
+                case 14:new AlertDialog.Builder(this).setTitle("Ses tonu").setItems(new String[]{"Daha tok","Tok / doğal","Normal"},(dd,i)->{
+                    prefs.edit().putFloat("pandora_voice_pitch",new float[]{0.75f,0.85f,1f}[i]).apply();setPreferredVoice();
+                }).show();break;
                 case 10:new AlertDialog.Builder(this).setTitle("Gizlilik / sınırlar")
-                    .setMessage("Hazır komutlar cihazda çalışır. Yerel mod 127.0.0.1:8080'e bağlanır. Bulut/Otomatik modlarını kendin seçtiğinde mesajların OpenRouter'ın bulut sağlayıcılarına iletilir. Notlar ve geçmiş varsayılan olarak buluta gönderilmez. Anahtar Android Keystore ile şifrelenir ancak telefona yüklü uygulamanın kullanıcı anahtarı kullanımı tamamen risksiz değildir. Bulut ücretsiz istek kotasına tabidir; model otomatik olarak ücretli modele geçmez. 8B yerel model bu telefonda yavaştır. Ses tanıma servisi ayrı internete bağlanabilir. Kesintisiz dinleme, WhatsApp görüşmesi kapatma, Binance hesabı, antivirüs, otomatik video yayınlama henüz yoktur.")
+                    .setMessage("Hazır komutlar cihazda çalışır. Yerel mod 127.0.0.1:8080'e bağlanır. Bulut/Otomatik modlarını kendin seçtiğinde mesajların OpenRouter'ın bulut sağlayıcılarına iletilir. Notlar ve geçmiş varsayılan olarak buluta gönderilmez. Anahtar Android Keystore ile şifrelenir ancak telefona yüklü uygulamanın kullanıcı anahtarı kullanımı tamamen risksiz değildir. Bulut ücretsiz istek kotasına tabidir; model otomatik olarak ücretli modele geçmez. 8B yerel model bu telefonda yavaştır. Uyandırma ve Türkçe ses tanıma cihazda Vosk ile çalışır. Android mikrofon göstergesi gizlenmez. Görüşme sırasında mikrofon erişimi telefona bağlıdır. Uygulamalar arası otomatik arama aktarımı, hesap işlemleri ve video yayınlama desteklenmez.")
                     .setPositiveButton("Tamam",null).show();break;
             }
         }).show();
@@ -687,9 +642,7 @@ public class MainActivity extends Activity {
             .setSingleChoiceItems(labels,java.util.Arrays.asList(values).indexOf(modelRouter.mode()),(d,which)->{
                 d.dismiss();
                 String chosen=values[which];
-                if("HERMES".equals(chosen)&&!com.jarvis.kisisel.ai.HermesVault.exists(this)){
-                    editHermesKey();return;
-                }
+                if("HERMES".equals(chosen)&&!com.jarvis.kisisel.ai.HermesVault.exists(this)){editHermesKey();return;}
                 if(("CLOUD".equals(chosen)||"AUTO".equals(chosen)) && !SecretVault.exists(this)){
                     new AlertDialog.Builder(this).setTitle("Önce ücretsiz bulut anahtarını ekle")
                         .setMessage("Bulut seçeneği için ücretsiz bir OpenRouter hesabı ve API anahtarı gerekiyor. Anahtarı buradaki sohbetimize gönderme. PANDORA Ayarlar içinde saklayacağız. Ücretli model çağrıları kapalıdır.")
@@ -800,7 +753,7 @@ public class MainActivity extends Activity {
         if(activeRequest!=null){activeRequest.cancel();activeRequest=null;}
         if(stopButton!=null)stopButton.setVisibility(View.GONE);
         showStatus("HAZIR · "+modelRouter.modeLabel());
-        if(notifyUser)reply("Yanıt üretimi iptal edildi. Yeni komut verebilirsin.");
+        if(notifyUser)reply("Yanıt bekleme durduruldu. Hermes sunucusunda başlamış bir görev devam ediyor olabilir.");
     }
     private void askModel(String prompt) {
         if(modelBusy){reply("Önceki yanıt hazırlanıyor. Alttaki ■ durdur düğmesine dokunabilirsin.");return;}
@@ -838,6 +791,8 @@ public class MainActivity extends Activity {
             +"\nSonuç bildirimleri: "+(notifications?"İZİNLİ":"İZİN GEREKİYOR")
             +"\nSiri benzeri ışık: "+(display?"İZİNLİ":"İZİN GEREKİYOR")
             +"\nMikrofon izni: "+(mic?"İZİNLİ":"İZİN GEREKİYOR")
+            +"\nGörsel analiz izni: "+(prefs.getBoolean("pandora_screen_image_optin",false)?"AÇIK":"KAPALI")
+            +"\nHermes anahtarı: "+(com.jarvis.kisisel.ai.HermesVault.exists(this)?"KAYITLI (bağlantıyı kontrol et)":"YOK")
             +"\nHey Pandora hizmeti: "+(WakeMonitorService.running?"AÇIK":"KAPALI")
             +"\nKulaklık: "+(headset?"BAĞLI":"BAĞLI DEĞİL")
             +"\n\nBu ekran yalnızca izinleri ve seçili ayarları gösterir."
@@ -852,6 +807,8 @@ public class MainActivity extends Activity {
                     openScreenAccessibilitySettings();
                 } else if("OFF".equals(mode)) {
                     chooseMode();
+                } else if("HERMES".equals(mode)&&!com.jarvis.kisisel.ai.HermesVault.exists(this)){editHermesKey();
+                } else if(!prefs.getBoolean("pandora_screen_image_optin",false)){configureVision();
                 } else if(!notifications && Build.VERSION.SDK_INT>=33) {
                     requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIF_REQUEST);
                 } else if(!display) {
@@ -869,9 +826,9 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("PANDORA · Başka uygulamada ekrana bak")
             .setMessage("Android Hızlı Ayarlar panelinde PANDORA kısayolunu kullanarak "
-                +"X, tarayıcı ve diğer uygulamalardaki metinleri analiz ettirebilirsin. "
+                +"X, tarayıcı ve diğer uygulamalardaki ekranı görsel olarak analiz ettirebilirsin. "
                 +"Bu işlem için mikrofon dinlemesi gerekmez; ancak Android Erişilebilirlik iznini "
-                +"senin açman gerekir. Bulut yapay zekâsına ekran metni gönderme ayrıca izinlidir. "
+                +"senin açman gerekir. Görsel analiz izni ve bulut modu ayrıca açık olmalıdır. "
                 +"Korumalı ekranlarda sonuç alınamayabilir.")
             .setNegativeButton("Kapat",null)
             .setNeutralButton("Ekran erişimi izni",(d,w)->openScreenAccessibilitySettings())
@@ -937,7 +894,7 @@ public class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this).setTitle("Ekranın üzerinde gösterme izni")
-            .setMessage("Hey Pandora algılandığında ekran kenarında 2,5 saniyelik mavi ışık görünmesi için Android'in ekran üzerinde gösterim izni gerekir. PANDORA bu izinle ekrandaki içerikleri OKUMAZ ve dokunmaları engellemez. Özellik tamamen isteğe bağlıdır.")
+            .setMessage("Hey Pandora algılandığında ekran ortasında 1,8 saniyelik beyaz dalgalı simge görünmesi için Android'in ekran üzerinde gösterim izni gerekir. PANDORA bu izinle ekrandaki içerikleri OKUMAZ ve dokunmaları engellemez. Özellik tamamen isteğe bağlıdır.")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("İzin ayarını aç",(d,w)->{
                 try {
@@ -950,16 +907,13 @@ public class MainActivity extends Activity {
     }
 
     private void toggleWakeMonitor() {
-        if(!WakeMonitorService.running && !PandoraAlerts.headsetConnected(this)){
-            Toast.makeText(this,"Hey Pandora yalnızca kulaklık bağlıyken çalışabilir.",Toast.LENGTH_LONG).show();return;
-        }
         if(WakeMonitorService.running) {
             stopService(new Intent(this,WakeMonitorService.class));
             Toast.makeText(this,"Dinleme durduruldu",Toast.LENGTH_SHORT).show();
             return;
         }
         new AlertDialog.Builder(this).setTitle("Hey Pandora · Deneysel")
-            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Saat, tarih ve şarj sorularını algılar; ekran analizi ve WhatsApp düğme denemesi için ayrıca Android Erişilebilirlik izni gerekir. Başlatılsın mı?")
+            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Uyandırma sesi cihaz üzerinde işlenir; ortam seslerinde bip üretilmez. Arama sırasında mikrofon başka uygulamaya ayrılabilir. Ekran analizi için ayrıca ekran erişimi gerekir. Başlatılsın mı?")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Başlat",(d,w)->{
                 if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
@@ -968,9 +922,10 @@ public class MainActivity extends Activity {
             }).show();
     }
     private void startWakeMonitor() {
+        if(!PandoraAlerts.headsetConnected(this)){Toast.makeText(this,"Hey Pandora için kulaklık gerekiyor.",Toast.LENGTH_LONG).show();return;}
         try {
             startForegroundService(new Intent(this,WakeMonitorService.class).setAction(WakeMonitorService.ACTION_START));
-            Toast.makeText(this,"Deneysel dinleme açılıyor",Toast.LENGTH_LONG).show();
+            Toast.makeText(this,"Yerel ses dinlemesi hazırlanıyor",Toast.LENGTH_LONG).show();
         } catch(RuntimeException e) {
             new AlertDialog.Builder(this).setTitle("Dinleme açılamadı")
               .setMessage("Android mikrofon hizmetini başlatmayı engelledi. PANDORA ekrandayken tekrar deneyebilirsin.")
@@ -1006,25 +961,10 @@ public class MainActivity extends Activity {
     }
 
     private void listen() {
-        if(!PandoraAlerts.headsetConnected(this)){Toast.makeText(this,"Kulaklık bağlı değil. Sesli giriş kapalı.",Toast.LENGTH_LONG).show();return;}
-        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"tr-TR");
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,"tr-TR");
-        intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"PANDORA dinliyor...");
-        try {showStatus("DİNLİYOR...");orb.setActive(true);startActivityForResult(intent,VOICE_REQUEST);}
-        catch(ActivityNotFoundException ex){orb.setActive(false);showStatus("HAZIR");reply("Telefonda ses tanıma uygulaması bulunamadı. Yazılı komutları kullanabilirsin.");}
-    }
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
-        super.onActivityResult(requestCode,resultCode,data);
-        if(requestCode==VOICE_REQUEST) {
-            orb.setActive(false);showStatus("HAZIR · " + modelRouter.modeLabel());
-            if(resultCode==RESULT_OK && data!=null) {
-                ArrayList<String> found=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-                if(found!=null && !found.isEmpty())runCommand(found.get(0));
-            }
-        }
+        if(!PandoraAlerts.headsetConnected(this)){Toast.makeText(this,"Sesli kullanım için kulaklığını bağla.",Toast.LENGTH_LONG).show();return;}
+        if(modelBusy){Toast.makeText(this,"Önceki yanıtı durdurup sesli konuşmayı açabilirsin.",Toast.LENGTH_SHORT).show();return;}
+        if(speech!=null)speech.stop();PandoraHeadphoneReply.stop();
+        startActivity(new Intent(this,VoiceSessionActivity.class));
     }
     private void launch(Intent intent) {
         try {startActivity(intent);}catch(Exception ex){Toast.makeText(this,"Bu işlemi açacak uygulama bulunamadı.",Toast.LENGTH_LONG).show();}
@@ -1032,7 +972,6 @@ public class MainActivity extends Activity {
     private void openUrl(String url) {launch(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));}
     @Override protected void onDestroy() {
         cancelModelRequest(false);
-        audioGuard.removeCallbacks(guardAudio);
         if(speech!=null){speech.stop();speech.shutdown();}
         if(memory!=null)memory.close();
         super.onDestroy();

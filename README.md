@@ -1,26 +1,13 @@
-# PANDORA
+# PANDORA · Hermes
 
-**Ozel, siyah-beyaz Android yapay zeka asistani.**
+Monokrom Android kişisel asistan. Bu dal, PANDORA 17'nin yerel Vosk uyandırma ve görsel yorumlama altyapısını PANDORA 20'nin mevcut Hermes bağlantısıyla birleştirir.
 
-Bu depo kullaniciya ait ozel kaynak kodu ve otomatik APK derleme sistemidir.
+Kurulum, sürüm farkları ve doğrulama sınırları: [PANDORA21.md](PANDORA21.md).
 
-## Ilk kurulum (yalnizca bir kez)
-
-1. [Dosya yukleme sayfasi](https://github.com/sorvaxllc-code/PANDORA/upload/main) uzerinden `PANDORA 10.zip` dosyasini ana dizine yukleyin.
-2. Dosya `main` dalina kaydedilince [GitHub Actions](https://github.com/sorvaxllc-code/PANDORA/actions/workflows/apk.yml) otomatik calisir.
-3. Action, ZIP'i acip `app/`, `tests/` ve Gradle dosyalarini bu depoya ekler.
-4. Java testleri ve Android derlemesi basarili olursa `PANDORA-APK` adiyla indirilebilir *debug APK* olusturulur.
-
-Sonraki kod guncellemeleri bu depodaki kaynak dosyalarina dogrudan yapilir, GitHub Actions yeniden APK derler. Kullanici her seferinde Code on the Go'yu calistirmak zorunda kalmaz.
-
-## Guvenlik ve imzalama
-
-- Repo **Private** olmali. API anahtarlari, .jks keystore ve sifreler buraya yuklenmez.
-- Debug APK, telefonda kurulu Code on the Go surumuyle ayni imzaya sahip olmayabilir. Bu durumda Android eski surumun uzerine kurulum yapmaz.
-- Notlarinizi yedeklemeden eski PANDORA uygulamasini kaldirmayin.
-- Gercek guncelleme kanali icin kalici ve guvenli release imzalama anahtari ile uygulama ici guncelleme bildirimi ayri bir gelistirme adimidir.
-- Burada kurulan is akisi otomatik **APK olusturur**, telefona sessizce yuklemez.
-
-## Proje plani
-
-Moduler ajan sistemi, yerel/bulut model, sesli uyandirma, proaktif bildirimler, guvenli cihaz kontrolleri, e-ticaret ve video uretimi modulleri zamanla gelistirilecektir.
+- Hermes Gateway: `http://127.0.0.1:8642`; anahtar Android Keystore ile saklanır.
+- Kulaklıkla sessiz Hey Pandora, dalgalı ses ekranı, kalıcı sohbet geçmişi.
+- Ekran görüntüsü açık kullanıcı isteği ve ayrı görsel analiz izniyle seçili sağlayıcıya gönderilir.
+- Kararlı Android paketi: `com.jarvis.kisisel.stable`; deneme paketleri ayrı kalır.
+- Modelleri hazırlama: `python3 scripts/prepare_voice_model.py`.
+- Testler: `bash tests/RUN_TESTS.sh`, `gradle :app:testDebugUnitTest :app:lintDebug`.
+- İmzalı APK: PANDORA Stable workflow. Gizli anahtarları ve keystore'u kaynak koduna eklemeyin.

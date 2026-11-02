@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   # A signed build only when a batch version is deliberately advanced.
   push:
-    branches: [main]
+    branches: [main, codex/pandora-17, codex/pandora-hermes-final]
     paths:
       - 'app/build.gradle'
 
@@ -38,8 +38,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.1'
+      - name: Prepare offline Turkish voice model
+        run: python3 scripts/prepare_voice_model.py
       - name: Source unit tests
         run: bash tests/RUN_TESTS.sh
+      - name: Verify integration tests and Android lint
+        run: gradle --no-daemon :app:testReleaseUnitTest :app:lintRelease
       - name: Check permanent signing secrets
         shell: bash
         env:

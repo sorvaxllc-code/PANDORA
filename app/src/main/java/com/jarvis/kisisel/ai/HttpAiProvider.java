@@ -39,18 +39,19 @@ public final class HttpAiProvider implements AiProvider {
    cancellation.attach(con);
    try {
      cancellation.ensureActive();
-     con.setRequestMethod("POST");con.setConnectTimeout(5000);con.setReadTimeout(timeoutMs);
+     con.setInstanceFollowRedirects(false);con.setRequestMethod("POST");con.setConnectTimeout(5000);con.setReadTimeout(timeoutMs);
      con.setRequestProperty("Content-Type","application/json; charset=utf-8");
      if(token!=null && !token.isEmpty())con.setRequestProperty("Authorization","Bearer "+token);
      if(endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL) && !FreeCloudPolicy.isFreeOnly(model))
        throw new SecurityException("Ücretli bulut modeli yasaklı");
+     if(endpoint.contains(":8642/"))con.setRequestProperty("Idempotency-Key",java.util.UUID.randomUUID().toString());
      con.setDoOutput(true);
      String resolvedModel=model;
      // llama.cpp may be started without --alias, in which case discover its actual loaded model id.
      if(endpoint.startsWith("http://127.0.0.1:")){
        try {
          HttpURLConnection models=(HttpURLConnection)new URL(endpoint.startsWith("http://127.0.0.1:8642/")?"http://127.0.0.1:8642/v1/models":"http://127.0.0.1:8080/v1/models").openConnection();
-         models.setConnectTimeout(4000);models.setReadTimeout(4000);
+         models.setInstanceFollowRedirects(false);models.setConnectTimeout(4000);models.setReadTimeout(4000);
          if(endpoint.startsWith("http://127.0.0.1:8642/"))models.setRequestProperty("Authorization","Bearer "+token);
          try(InputStream is=models.getInputStream();BufferedReader rd=new BufferedReader(new InputStreamReader(is,StandardCharsets.UTF_8))){
            StringBuilder b=new StringBuilder();String line;
@@ -69,7 +70,7 @@ public final class HttpAiProvider implements AiProvider {
      if(status!=200)throw new Exception(FreeCloudPolicy.httpMessage(status,endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL)));
      StringBuilder response=new StringBuilder();
      try(InputStream in=con.getInputStream();BufferedReader br=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
-       String line;while((line=br.readLine())!=null)response.append(line);
+       String line;while((line=br.readLine())!=null){response.append(line);if(response.length()>2000000)throw new Exception("Yanıt boyutu sınırı aşıldı.");}
      }
      cancellation.ensureActive();
      // HTTP 200 can still contain an API error or a message with JSON null content.
@@ -81,6 +82,8 @@ public final class HttpAiProvider implements AiProvider {
      JSONArray choices=root.optJSONArray("choices");
      if(choices==null || choices.length()==0)throw new Exception("Model cevap seçeneği döndürmedi.");
      JSONObject choice=choices.getJSONObject(0);
+     String reason=choice.optString("finish_reason","");
+     if("cancelled".equals(reason)||"error".equals(reason))throw new Exception("Hermes işlemi tamamlanmadı: "+reason);
      JSONObject message=choice.optJSONObject("message");
      if(message==null)throw new Exception("Modelin mesaj alanı bulunamadı.");
      if(message.isNull("content")){
@@ -102,7 +105,9 @@ public final class HttpAiProvider implements AiProvider {
      if(answer.isEmpty() || "null".equalsIgnoreCase(answer)){
        throw new Exception("Model bu istekte okunabilir metin üretmedi. Ücretsiz bir başka modele geçmek gerekebilir.");
      }
+     if("length".equals(reason))answer+="\n\nYanıt uzunluk veya işlem sınırında kesildi.";
      return answer;
    }finally{cancellation.detach(con);con.disconnect();}
  }
 }
+

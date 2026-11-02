@@ -46,3 +46,4 @@ public final class HermesVault {
   }
   public static void clear(Context c){c.getSharedPreferences(STORE,0).edit().clear().apply();}
 }
+

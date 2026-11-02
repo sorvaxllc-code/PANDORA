@@ -24,6 +24,10 @@ public final class MemoryCommandParser {
         // Speech recognizers/soft keyboards may introduce newlines and irregular spaces.
         String command=original.replace('\u00a0',' ').replaceAll("\\s+", " ").trim();
         command=PREFIX.matcher(command).replaceFirst("").trim();
+        Matcher direct=Pattern.compile("(?iu)^(?:şunu\\s+|bunu\\s+)?not\\s+(?:al|et|kaydet)\\b\\s*[:：,;.!-]?\\s*(.*)$").matcher(command);
+        if(direct.matches())return direct.group(1).trim();
+        Matcher suffix=Pattern.compile("(?iu)^(.+?)\\s+(?:diye\\s+)?not\\s+(?:al|et|kaydet)[.!]?$",Pattern.DOTALL).matcher(command);
+        if(suffix.matches())return suffix.group(1).trim();
         Matcher m=SAVE.matcher(command);
         if (!m.matches()) m=REMEMBER.matcher(command);
         if (!m.matches()) return null;

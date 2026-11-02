@@ -9,3 +9,6 @@ local.properties
 *.jks
 *.keystore
 *.p12
+
+app/src/main/assets/model-tr/
+app/src/main/assets/model-wake/
