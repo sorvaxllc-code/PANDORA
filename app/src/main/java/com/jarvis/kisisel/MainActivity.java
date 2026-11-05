@@ -38,6 +38,7 @@ import android.content.Context;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -64,15 +65,25 @@ public class MainActivity extends Activity {
     private static final int VOICE_REQUEST = 40;
     private static final int NOTIF_REQUEST = 41;
     private static final int WAKE_AUDIO_REQUEST = 42;
-    private static final int BG = 0xFF070707;
-    private static final int CARD = 0xFF1B1B1B;
-    private static final int CYAN = 0xFFF1F1F1;
-    private static final int MUTED = 0xFFAAAAAA;
+    private static final int BG = 0xFF070914;
+    private static final int CARD = 0xFF16152B;
+    private static final int CYAN = 0xFFAE84FF;
+    private static final int MUTED = 0xFFA4A9C5;
     private MemoryDb memory;
     private SharedPreferences prefs;
     private TextToSpeech speech;
     private boolean ttsReady = false;
     private OrbView orb;
+    private OrbView voiceOrb;
+    private LinearLayout rootPage;
+    private FrameLayout stage;
+    private final View[] screens=new View[4];
+    private final TextView[] tabs=new TextView[4];
+    private TextView activeAgentChip;
+    private String activeAgent="Genel";
+    private int agentColor=0xFF9B65FF;
+    private int agentSecondary=0xFF22BAFF;
+
     private LinearLayout feed;
     private ScrollView scroll;
     private EditText input;
@@ -100,14 +111,20 @@ public class MainActivity extends Activity {
             prefs.edit().putString("pandora_mode", "LOCAL").apply();
         }
         skillRegistry = AgentRegistry.standard();
+        activeAgent = prefs.getString("pandora_agent","Genel");
+        applyAgentColors(activeAgent);
+
         ReminderReceiver.ensureChannel(this);
         speech = new TextToSpeech(this, result -> {
             if(result == TextToSpeech.SUCCESS && speech != null) {
                 int lang = speech.setLanguage(Locale.forLanguageTag("tr-TR"));
                 ttsReady = lang != TextToSpeech.LANG_MISSING_DATA && lang != TextToSpeech.LANG_NOT_SUPPORTED;
+                if(ttsReady) setPreferredVoice();
             }
         });
+        if(!prefs.contains("pandora_mode")) modelRouter.setMode("HERMES");
         buildUi();
+        enableHeadsetAudioGuard();
         List<String[]> history = memory.messages();
         if(history.isEmpty()) addBubble(false, "Merhaba! Ben PANDORA. Sesli konuşmak için mikrofonu kullanabilir veya aşağıdaki komutlardan başlayabilirsin. Komutlar ücretsiz ve yerel çalışır.", false);
         else for (String[] m : history) addBubble("user".equals(m[0]), m[1], false);
@@ -192,62 +209,323 @@ public class MainActivity extends Activity {
         return t;
     }
     private LinearLayout.LayoutParams lp(int w, int h) { return new LinearLayout.LayoutParams(w,h); }
+    private GradientDrawable neonCard(int base,int radius,int strokeColor) {
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{base,0xFF101327});
+        d.setCornerRadius(dp(radius));
+        d.setStroke(dp(1),strokeColor);
+        return d;
+    }
+
+    private TextView neonLabel(String label,int size,int color,boolean bold) {
+        TextView t=text(label,size,color,bold);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        return t;
+    }
+
+    private TextView tile(String title,String hint,int color,Runnable action) {
+        TextView t=text(title+"\n"+hint,13,Color.WHITE,true);
+        t.setLineSpacing(dp(3),1);
+        t.setPadding(dp(14),dp(14),dp(9),dp(14));
+        t.setBackground(neonCard(0xFF15152B,17,(color & 0x00FFFFFF)|0x44000000));
+        t.setOnClickListener(v->action.run());
+        return t;
+    }
+
     private void buildUi() {
-        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(BG);
-        page.setPadding(dp(15),dp(11),dp(15),dp(10));setContentView(page);
-        LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand=text("PANDORA",28,Color.WHITE,true);brand.setLetterSpacing(.16f);heading.addView(brand,new LinearLayout.LayoutParams(0,dp(48),1));
-        TextView privacy=text("● PANDORA " + modelRouter.modeLabel(),11,CYAN,true);modeBadge=privacy;privacy.setGravity(Gravity.CENTER);
-        privacy.setPadding(dp(8),dp(7),dp(8),dp(7));privacy.setBackground(outline(0xFF171717,18));heading.addView(privacy);
-        page.addView(heading);
-        orb=new OrbView(this); LinearLayout.LayoutParams orbParams=lp(-1,dp(172)); orbParams.topMargin=dp(3);
-        page.addView(orb,orbParams);
-        status=text("",12,CYAN,true);status.setGravity(Gravity.CENTER);status.setLetterSpacing(.13f);page.addView(status);
-        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ · 1.2",11,MUTED,false);subtitle.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams subparams=lp(-1,dp(32));page.addView(subtitle,subparams);
-        HorizontalScrollView quickScroll=new HorizontalScrollView(this);quickScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout quickRow=new LinearLayout(this);quickRow.setOrientation(LinearLayout.HORIZONTAL);
-        quickButton(quickRow,"＋ Not al",()->promptNote());
-        quickButton(quickRow,"▤ Notlar",()->showNotes());
-        quickButton(quickRow,"⇧ Not yedeği",()->shareNotesBackup());
-        quickButton(quickRow,"◉ Hey Pandora",()->toggleWakeMonitor());
-        quickButton(quickRow,"✓ Sistem durumu",()->showSystemReadiness());
-        quickButton(quickRow,"✦ Ekran ışığı",()->showOrAuthorizeOverlay());
-        quickButton(quickRow,"▣ Ekran erişimi",()->openScreenAccessibilitySettings());
-        quickButton(quickRow,"◈ Hızlı erişim",()->showQuickTileSetup());
-        quickButton(quickRow,"◌ Uyarı testi",()->testImportantAlert());
-        quickButton(quickRow,"◉ Yapay zekâ",()->chooseMode());
-        quickButton(quickRow,"☁ Bulut bağla",()->editApiKey());
-        quickButton(quickRow,"☁ Bulut testi",()->checkCloudKey());
-        quickButton(quickRow,"☁ Sohbet testi",()->confirmCloudConversationTest());
-        quickButton(quickRow,"◎ Yerel testi",()->checkLocalModel());
-        quickButton(quickRow,"◷ Hatırlat",()->promptReminder(null));
-        quickButton(quickRow,"? Komutlar",()->reply(help()));
-        quickButton(quickRow,"⚙ Ayarlar",()->showSettings());
-        quickScroll.addView(quickRow);page.addView(quickScroll);
-        TextView consoleTitle=text("KONUŞMA GEÇMİŞİ",10,MUTED,true); consoleTitle.setLetterSpacing(.13f);
-        LinearLayout.LayoutParams titlep=lp(-1,dp(27));titlep.topMargin=dp(11);page.addView(consoleTitle,titlep);
-        scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
-        feed=new LinearLayout(this);feed.setOrientation(LinearLayout.VERTICAL);feed.setPadding(dp(0),dp(5),dp(0),dp(10));scroll.addView(feed);
-        LinearLayout.LayoutParams scp=new LinearLayout.LayoutParams(-1,0,1);page.addView(scroll,scp);
-        LinearLayout composer=new LinearLayout(this);composer.setGravity(Gravity.CENTER_VERTICAL);composer.setPadding(dp(6),dp(6),dp(6),dp(6));
-        composer.setBackground(outline(0xFF171717,22));
-        input=new EditText(this);input.setTextSize(15);input.setTextColor(Color.WHITE);input.setSingleLine(false);
-        input.setMinLines(1);input.setMaxLines(3);input.setHintTextColor(0xFF999999);input.setHint("PANDORA'ya söyle...");
-        input.setBackgroundColor(Color.TRANSPARENT);input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        input.setPadding(dp(10),dp(8),dp(6),dp(8));composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
-        Button mic=roundButton("MIC",0xFF363636); mic.setContentDescription("Sesli komut");mic.setOnClickListener(v->listen());
-        composer.addView(mic,lp(dp(48),dp(48)));
-        stopButton=roundButton("■",0xFF414141);
-        stopButton.setTextSize(20);stopButton.setContentDescription("Yapay zekâ isteğini durdur");
-        stopButton.setVisibility(View.GONE);
-        stopButton.setOnClickListener(v->cancelModelRequest(true));
-        composer.addView(stopButton,lp(dp(48),dp(48)));
-        Button send=roundButton("➤",0xFFF2F2F2);send.setTextColor(0xFF111111);send.setContentDescription("Gönder");
-        LinearLayout.LayoutParams sendp=lp(dp(48),dp(48));sendp.leftMargin=dp(4);composer.addView(send,sendp);
-        send.setOnClickListener(v->submit());page.addView(composer);
-        TextView disclaimer=text("Ücretsiz model seçeneği · İzinli ve modüler altyapı",10,0xFF8F8F8F,false);
-        disclaimer.setGravity(Gravity.CENTER);LinearLayout.LayoutParams dis=lp(-1,dp(25));page.addView(disclaimer,dis);
+        rootPage=new LinearLayout(this);
+        rootPage.setOrientation(LinearLayout.VERTICAL);
+        rootPage.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{0xFF070915,0xFF10112A,0xFF070914}));
+        rootPage.setPadding(dp(16),dp(10),dp(16),dp(4));
+        setContentView(rootPage);
+
+        LinearLayout heading=new LinearLayout(this);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView emblem=text("P",24,Color.WHITE,true);
+        emblem.setGravity(Gravity.CENTER);
+        emblem.setBackground(neonCard(0xFF302062,16,0xFF8B65FA));
+        heading.addView(emblem,lp(dp(46),dp(46)));
+        emblem.setOnClickListener(v->switchPage(0));
+        LinearLayout titleGroup=new LinearLayout(this);titleGroup.setOrientation(LinearLayout.VERTICAL);
+        titleGroup.setPadding(dp(12),0,0,0);
+        TextView brand=text("P A N D O R A",18,Color.WHITE,true);
+        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ",10,0xFF9B9DBF,false);
+        titleGroup.addView(brand);titleGroup.addView(subtitle);
+        heading.addView(titleGroup,new LinearLayout.LayoutParams(0,-2,1));
+        Button menu=roundButton("☰",0xFF1D1B35);
+        menu.setContentDescription("Ayarlar ve diğer araçlar");
+        heading.addView(menu,lp(dp(47),dp(45)));
+        menu.setOnClickListener(v->showNavigation());
+        rootPage.addView(heading,lp(-1,dp(55)));
+
+        LinearLayout strip=new LinearLayout(this);
+        strip.setGravity(Gravity.CENTER_VERTICAL);
+        strip.setPadding(dp(11),dp(6),dp(11),dp(6));
+        strip.setBackground(neonCard(0xFF14152B,13,0xFF332F69));
+        LinearLayout.LayoutParams stripLp=lp(-1,dp(44));stripLp.topMargin=dp(8);
+        activeAgentChip=neonLabel("◈ GENEL AJAN",10,0xFFC7B2FF,true);
+        strip.addView(activeAgentChip,new LinearLayout.LayoutParams(0,-2,1));
+        status=neonLabel("HAZIR",10,MUTED,false);
+        strip.addView(status);
+        modeBadge=neonLabel("",10,0xFF8494C8,false);
+        rootPage.addView(strip,stripLp);
+
+        stage=new FrameLayout(this);
+        LinearLayout.LayoutParams stageLp=new LinearLayout.LayoutParams(-1,0,1);
+        stageLp.topMargin=dp(10);rootPage.addView(stage,stageLp);
+
+        // Screen 1: Visual home is intentionally independent of conversation history.
+        ScrollView homeScroll=new ScrollView(this);homeScroll.setFillViewport(false);
+        homeScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout home=new LinearLayout(this);home.setOrientation(LinearLayout.VERTICAL);
+        home.setPadding(dp(1),dp(10),dp(1),dp(12));
+        TextView greet=text("Merhaba, yeniden hoş geldin.",22,Color.WHITE,true);
+        home.addView(greet);
+        TextView lead=text("Pandora hazır. Bugün birlikte ne yapalım?",13,MUTED,false);
+        lead.setPadding(0,dp(6),0,0);home.addView(lead);
+        orb=new OrbView(this);orb.setAccent(agentColor,agentSecondary);
+        LinearLayout.LayoutParams orbLp=lp(-1,dp(248));orbLp.topMargin=dp(2);
+        home.addView(orb,orbLp);
+        orb.setOnClickListener(v->switchPage(3));
+        TextView orbCaption=text("✦  AKILLI ÇEKİRDEK  ·  "+activeAgent.toUpperCase(new Locale("tr","TR")),11,0xFFC5BDFF,true);
+        orbCaption.setGravity(Gravity.CENTER);home.addView(orbCaption);
+        TextView actionHead=text("Hızlı başlangıç",15,Color.WHITE,true);
+        LinearLayout.LayoutParams ah=lp(-1,-2);ah.topMargin=dp(24);home.addView(actionHead,ah);
+
+        LinearLayout rowA=new LinearLayout(this);
+        LinearLayout.LayoutParams rpa=lp(-1,-2);rpa.topMargin=dp(10);
+        TextView talk=tile("◉  Sesli görüşme","Pandora ile konuş",0xFF9961FF,()->switchPage(3));
+        TextView chat=tile("✧  Sohbet","Bir mesaj gönder",0xFF28BAFF,()->switchPage(1));
+        LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(78),1);
+        half.rightMargin=dp(8);rowA.addView(talk,half);
+        rowA.addView(chat,new LinearLayout.LayoutParams(0,dp(78),1));
+        home.addView(rowA,rpa);
+        LinearLayout rowB=new LinearLayout(this);
+        LinearLayout.LayoutParams rpb=lp(-1,-2);rpb.topMargin=dp(8);
+        TextView agents=tile("◇  Ajanlar","Uzmanını seç",0xFF28BAFF,()->switchPage(2));
+        TextView reminders=tile("◷  Hatırlatıcı","Yeni bir görev planla",0xFF58E7CD,()->promptReminder(null));
+        LinearLayout.LayoutParams half2=new LinearLayout.LayoutParams(0,dp(78),1);
+        half2.rightMargin=dp(8);rowB.addView(agents,half2);
+        rowB.addView(reminders,new LinearLayout.LayoutParams(0,dp(78),1));
+        home.addView(rowB,rpb);
+        TextView readiness=text("▤  Bağlantı, izinler ve sistem durumunu kontrol et  ›",12,0xFFCCD1F1,false);
+        readiness.setPadding(dp(14),dp(15),dp(12),dp(15));
+        readiness.setBackground(neonCard(0xFF101429,15,0xFF343454));
+        LinearLayout.LayoutParams readyLp=lp(-1,-2);readyLp.topMargin=dp(16);
+        home.addView(readiness,readyLp);readiness.setOnClickListener(v->showSystemReadiness());
+        homeScroll.addView(home);
+        screens[0]=homeScroll;stage.addView(homeScroll,new FrameLayout.LayoutParams(-1,-1));
+
+        // Screen 2: Existing Hermes + local memory chat, presented in new visual shell.
+        LinearLayout conversation=new LinearLayout(this);
+        conversation.setOrientation(LinearLayout.VERTICAL);
+        TextView chatHeadline=text("Sohbet",22,Color.WHITE,true);
+        conversation.addView(chatHeadline);
+        TextView chatHint=text("Seçili ajan: "+activeAgent+"  •  Sohbet geçmişin cihazda tutulur",11,MUTED,false);
+        chatHint.setPadding(0,dp(4),0,dp(9));
+        conversation.addView(chatHint);
+        scroll=new ScrollView(this);scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(false);
+        feed=new LinearLayout(this);feed.setOrientation(LinearLayout.VERTICAL);
+        feed.setPadding(dp(0),dp(6),dp(0),dp(11));
+        scroll.addView(feed);
+        conversation.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout composer=new LinearLayout(this);
+        composer.setGravity(Gravity.CENTER_VERTICAL);
+        composer.setPadding(dp(3),dp(4),dp(3),dp(4));
+        composer.setBackground(neonCard(0xFF19192F,25,0xFF55447B));
+        Button plus=roundButton("+",0xFF1D1C37);plus.setContentDescription("Araçlar");
+        composer.addView(plus,lp(dp(39),dp(47)));
+        plus.setOnClickListener(v->showNavigation());
+        input=new EditText(this);input.setTextSize(14);input.setTextColor(Color.WHITE);
+        input.setSingleLine(false);input.setMinLines(1);input.setMaxLines(4);
+        input.setHintTextColor(0xFF9E9EBB);input.setHint("Pandora'ya mesaj yaz");
+        input.setBackgroundColor(Color.TRANSPARENT);
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setPadding(dp(8),dp(7),dp(4),dp(7));
+        composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
+        Button mic=roundButton("♩",0xFF232344);mic.setTextColor(0xFFB5A6FF);
+        mic.setContentDescription("Kulaklıkla sesli konuş");
+        composer.addView(mic,lp(dp(42),dp(47)));mic.setOnClickListener(v->listen());
+        stopButton=roundButton("■",0xFF41365F);stopButton.setContentDescription("İsteği durdur");
+        stopButton.setVisibility(View.GONE);stopButton.setOnClickListener(v->cancelModelRequest(true));
+        composer.addView(stopButton,lp(dp(38),dp(47)));
+        Button send=roundButton("➤",0xFF8C5AFF);send.setTextColor(Color.WHITE);
+        send.setContentDescription("Mesajı gönder");
+        composer.addView(send,lp(dp(43),dp(47)));send.setOnClickListener(v->submit());
+        conversation.addView(composer);
+        screens[1]=conversation;stage.addView(conversation,new FrameLayout.LayoutParams(-1,-1));
+
+        // Screen 3: Specialist agents share the current trusted model connection.
+        ScrollView agentScroll=new ScrollView(this);
+        agentScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout agentsBody=new LinearLayout(this);agentsBody.setOrientation(LinearLayout.VERTICAL);
+        agentsBody.setPadding(dp(1),dp(9),dp(1),dp(15));
+        agentsBody.addView(text("Uzman ajanlar",23,Color.WHITE,true));
+        TextView agentInfo=text("Her ajanın tonu ve rengi farklıdır. Hepsi aynı güvenli yapay zekâ bağlantısını kullanır.",12,MUTED,false);
+        agentInfo.setPadding(0,dp(9),0,dp(14));agentsBody.addView(agentInfo);
+        String[][] choices={
+            {"Genel","Gündelik sorular ve kişisel asistan","9B65FF","24BAFF"},
+            {"Araştırma","Bilgi, analiz ve kaynak değerlendirme","2ABFFF","4A88FF"},
+            {"Finans","Bütçe, veriler ve risk analizi","41DDA8","28B6E8"},
+            {"E-ticaret","Ürün, marka ve mağaza geliştirme","FFB76E","E66AF9"},
+            {"Yazılım","Kodlama, hata ayıklama ve mimari","A288FF","42C8FF"},
+            {"Yaratıcı","İçerik ve fikir geliştirme","F07BC8","9B65FF"},
+            {"Planlayıcı","Görevler, hatırlatmalar ve düzen","67DCE8","61A0FF"}
+        };
+        for(String[] item:choices) {
+            final String name=item[0];
+            final int color=Color.parseColor("#"+item[2]);
+            final int second=Color.parseColor("#"+item[3]);
+            LinearLayout card=new LinearLayout(this);card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(dp(13),dp(12),dp(12),dp(12));
+            card.setBackground(neonCard(0xFF17162E,17,(color&0x00FFFFFF)|0x66000000));
+            TextView dot=text("●",22,color,true);dot.setGravity(Gravity.CENTER);
+            card.addView(dot,lp(dp(40),dp(43)));
+            LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);
+            labels.addView(text(name,16,Color.WHITE,true));
+            TextView desc=text(item[1],11,MUTED,false);
+            desc.setPadding(0,dp(4),0,0);labels.addView(desc);
+            card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+            TextView arrow=text("›",23,color,false);card.addView(arrow);
+            LinearLayout.LayoutParams cp=lp(-1,-2);cp.bottomMargin=dp(9);
+            agentsBody.addView(card,cp);
+            card.setOnClickListener(v->chooseAgent(name,color,second));
+        }
+        agentScroll.addView(agentsBody);
+        screens[2]=agentScroll;stage.addView(agentScroll,new FrameLayout.LayoutParams(-1,-1));
+
+        // Screen 4: Voice uses Android's actual speech-recognizer availability.
+        LinearLayout voice=new LinearLayout(this);voice.setOrientation(LinearLayout.VERTICAL);
+        voice.setGravity(Gravity.CENTER_HORIZONTAL);
+        voice.setPadding(dp(8),dp(22),dp(8),dp(12));
+        TextView voiceTitle=text("Sesli görüşme",23,Color.WHITE,true);
+        voiceTitle.setGravity(Gravity.CENTER);voice.addView(voiceTitle);
+        TextView voiceDescription=text("Kulaklık bağlıyken mikrofona dokun ve konuş.",12,MUTED,false);
+        voiceDescription.setGravity(Gravity.CENTER);voiceDescription.setPadding(0,dp(9),0,0);
+        voice.addView(voiceDescription);
+        voiceOrb=new OrbView(this);voiceOrb.setAccent(agentColor,agentSecondary);
+        LinearLayout.LayoutParams vlp=lp(-1,dp(310));vlp.topMargin=dp(22);
+        voice.addView(voiceOrb,vlp);
+        TextView listening=text("◉  PANDORA HAZIR",12,0xFFD8C9FF,true);
+        listening.setGravity(Gravity.CENTER);voice.addView(listening);
+        TextView explain=text("Ses tanıma, telefonun Android hizmetini kullanır. Görüşmelerde ve arka planda çalışması cihaz izinlerine bağlıdır.",11,MUTED,false);
+        explain.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams exp=lp(-1,-2);exp.topMargin=dp(11);
+        voice.addView(explain,exp);
+        Button startVoice=roundButton("◉  Konuşmaya başla",0xFF784BEA);
+        startVoice.setTextSize(15);
+        LinearLayout.LayoutParams sv=lp(-1,dp(55));sv.topMargin=dp(27);
+        voice.addView(startVoice,sv);startVoice.setOnClickListener(v->listen());
+        TextView wake=text("Hey Pandora · Kulaklıkla uyandırmayı yönet",12,0xFFB6A8FF,false);
+        wake.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams wk=lp(-1,dp(50));voice.addView(wake,wk);
+        wake.setOnClickListener(v->toggleWakeMonitor());
+        screens[3]=voice;stage.addView(voice,new FrameLayout.LayoutParams(-1,-1));
+
+        LinearLayout bottom=new LinearLayout(this);
+        bottom.setGravity(Gravity.CENTER);
+        bottom.setPadding(dp(3),dp(10),dp(3),dp(8));
+        bottom.setBackground(neonCard(0xFF101127,17,0xFF353258));
+        String[] names={"⌂\nAna sayfa","▤\nSohbet","◇\nAjanlar","◉\nSes"};
+        for(int i=0;i<names.length;i++){
+            final int tab=i;
+            TextView item=text(names[i],11,MUTED,false);
+            item.setGravity(Gravity.CENTER);
+            item.setPadding(dp(2),dp(6),dp(2),dp(6));
+            bottom.addView(item,new LinearLayout.LayoutParams(0,dp(53),1));
+            item.setOnClickListener(v->switchPage(tab));
+            tabs[i]=item;
+        }
+        rootPage.addView(bottom);
+        updateAgentBadge();
+        switchPage(0);
+    }
+
+    private void applyAgentColors(String agent) {
+        switch(agent) {
+            case "Araştırma":agentColor=0xFF2ABFFF;agentSecondary=0xFF4A88FF;break;
+            case "Finans":agentColor=0xFF41DDA8;agentSecondary=0xFF28B6E8;break;
+            case "E-ticaret":agentColor=0xFFFFB76E;agentSecondary=0xFFE66AF9;break;
+            case "Yazılım":agentColor=0xFFA288FF;agentSecondary=0xFF42C8FF;break;
+            case "Yaratıcı":agentColor=0xFFF07BC8;agentSecondary=0xFF9B65FF;break;
+            case "Planlayıcı":agentColor=0xFF67DCE8;agentSecondary=0xFF61A0FF;break;
+            default:activeAgent="Genel";agentColor=0xFF9B65FF;agentSecondary=0xFF24BAFF;break;
+        }
+    }
+    private void updateAgentBadge(){
+        if(activeAgentChip!=null){
+            activeAgentChip.setText("◆ "+activeAgent.toUpperCase(new Locale("tr","TR"))+" AJANI");
+            activeAgentChip.setTextColor(agentColor);
+        }
+        if(orb!=null)orb.setAccent(agentColor,agentSecondary);
+        if(voiceOrb!=null)voiceOrb.setAccent(agentColor,agentSecondary);
+    }
+    private void chooseAgent(String name,int color,int second){
+        activeAgent=name;agentColor=color;agentSecondary=second;
+        prefs.edit().putString("pandora_agent",name).apply();
+        updateAgentBadge();
+        switchPage(1);
+        Toast.makeText(this,name+" ajanı seçildi",Toast.LENGTH_SHORT).show();
+    }
+    private void switchPage(int index) {
+        for(int i=0;i<screens.length;i++){
+            if(screens[i]!=null)screens[i].setVisibility(index==i?View.VISIBLE:View.GONE);
+            if(tabs[i]!=null){
+                tabs[i].setTextColor(index==i?Color.WHITE:MUTED);
+                tabs[i].setBackground(index==i?neonCard(0xFF29204A,13,agentColor):null);
+            }
+        }
+    }
+    private String agentPrompt(String prompt){
+        if("Genel".equals(activeAgent))return prompt;
+        String rule;
+        switch(activeAgent){
+            case "Araştırma":rule="Kaynakların güvenilirliğini ayır. İnternete erişimin yoksa güncel bilgi doğruladığını iddia etme.";break;
+            case "Finans":rule="Riskleri, varsayımları, ücretleri ve belirsizliği açıkla. Gerçek zamanlı fiyat olmadan kesin sinyal verme. Kullanıcı onayı olmadan işlem yapma.";break;
+            case "E-ticaret":rule="Ürün, pazar, müşteri, mağaza ve bütçe odaklı somut öneriler sun. Kanıtlanmamış rakamları tahmin olarak belirt.";break;
+            case "Yazılım":rule="Sade, test edilebilir ve güvenli kod öner. Gerçekten çalıştırılmayan bir şeyi test edildi diye sunma.";break;
+            case "Yaratıcı":rule="Özgün, kullanılabilir fikirler ve metinler sun; gerçek olmayan kanıtlar üretme.";break;
+            default:rule="Öncelikleri, uygulanabilir adımları ve takvimi açıkla; onaylanmayan eylemleri yapma.";
+        }
+        return "Aktif uzman: "+activeAgent+". "+rule+"\n\nKullanıcının isteği:\n"+prompt;
+    }
+
+    private void showNavigation() {
+        final String[] choices={
+            "✦  Hey Pandora • Kulaklıkla dinle",
+            "◷  Hatırlatıcı oluştur", "▣  Notlar", "＋  Not al",
+            "⌕  Ekranı yorumla", "◈  Ekran erişimi izni",
+            "◈  Hızlı erişim kutucuğu", "✧  Görüşmeyi görüntülüye aktar (deneme)",
+            "☼  Önemli bildirim denemesi", "▤  Sistem durumu",
+            "◉  Model seçimi", "◆  Hermes API anahtarı",
+            "⚙  Ses ve genel ayarlar", "☰  Komutlar",
+            "⇧  Notların yedeğini paylaş","◇  Ajan ve modüller"
+        };
+        new AlertDialog.Builder(this).setTitle("PANDORA · MENÜ")
+         .setItems(choices,(dialog,which)->{
+           switch(which) {
+             case 0: toggleWakeMonitor();break;
+             case 1: promptReminder(null);break;
+             case 2: showNotes();break;
+             case 3: promptNote();break;
+             case 4: showQuickTileSetup();break;
+             case 5: openScreenAccessibilitySettings();break;
+             case 6: showQuickTileSetup();break;
+             case 7: reply(PandoraAccessibilityService.requestWhatsAppVideoSwitch());break;
+             case 8: testImportantAlert();break;
+             case 9: showSystemReadiness();break;
+             case 10: chooseMode();break;
+             case 11: editHermesKey();break;
+             case 12: showSettings();break;
+             case 13: reply(help());break;
+             case 14: shareNotesBackup();break;
+             case 15: new AlertDialog.Builder(this).setTitle("PANDORA · Modüller")
+                  .setMessage(skillRegistry.describe()+"\n\nKritik işlemler açık kullanıcı onayı gerektirir. Kripto alım-satımı kapalıdır.")
+                  .setPositiveButton("Tamam",null).show();break;
+           }
+         }).setNegativeButton("Kapat",null).show();
     }
     private Button roundButton(String text,int color) {
         Button b=new Button(this);b.setText(text);b.setTextColor(Color.WHITE);b.setTextSize(18);b.setAllCaps(false);
@@ -261,14 +539,20 @@ public class MainActivity extends Activity {
     private void addBubble(boolean user,String value,boolean save) {
         TextView bubble=text(value,14,user?Color.WHITE:0xFFE6E6E6,false);
         bubble.setTextIsSelectable(true);bubble.setPadding(dp(13),dp(11),dp(13),dp(11));
-        bubble.setBackground(outline(user?0xFF383838:CARD,15));
+        bubble.setBackground(neonCard(user?0xFF30234B:CARD,15,user?0xFF674C9D:0xFF303252));
         LinearLayout.LayoutParams p=lp(-2,-2);p.gravity=user?Gravity.END:Gravity.START;
         p.topMargin=dp(7);p.bottomMargin=dp(4);
         bubble.setMaxWidth((int)(getResources().getDisplayMetrics().widthPixels*.84)); feed.addView(bubble,p);
         if(save) memory.message(user?"user":"pandora",value);
         scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));
     }
-    private void showStatus(String value) { status.setText(value); if(modeBadge!=null)modeBadge.setText("● PANDORA " + modelRouter.modeLabel()); }
+    private void showStatus(String value) {
+        if(status!=null)status.setText(value);
+        if(modeBadge!=null)modeBadge.setContentDescription("Model: "+modelRouter.modeLabel());
+        boolean thinking=value.contains("YANIT BEKLENİYOR") || value.contains("ANALİZ EDİLİYOR");
+        if(orb!=null)orb.setActive(thinking);
+        if(voiceOrb!=null)voiceOrb.setActive(thinking);
+    }
     private void reply(String value) { addBubble(false,value,true); if(voiceEnabled && ttsReady && PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this)) speech.speak(value,TextToSpeech.QUEUE_FLUSH,null,"pandora"); }
     private void submit() {
         String str=input.getText().toString().trim();if(str.isEmpty())return;
@@ -484,6 +768,87 @@ public class MainActivity extends Activity {
                         ReminderReceiver.cancel(this,r.id);memory.removeReminder(r.id);reply("Hatırlatıcı silindi.");}).show();})
             .setNegativeButton("Kapat",null).show();
     }
+    private final android.os.Handler audioGuard = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable guardAudio = new Runnable() {
+        @Override public void run(){
+            if(speech!=null && (!PandoraAlerts.headsetConnected(MainActivity.this)
+                   || PandoraAlerts.inCall(MainActivity.this)))speech.stop();
+            audioGuard.postDelayed(this,250);
+        }
+    };
+    private void enableHeadsetAudioGuard(){audioGuard.postDelayed(guardAudio,250);}
+    @Override protected void onResume(){
+        super.onResume();
+        if(speech!=null&&!PandoraAlerts.headsetConnected(this))speech.stop();
+    }
+    private void editHermesKey(){
+        EditText key=new EditText(this);
+        key.setSingleLine(true);key.setHint("Hermes API_SERVER_KEY");
+        key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        key.setPadding(dp(20),dp(12),dp(20),dp(12));
+        new AlertDialog.Builder(this).setTitle("Hermes • Yerel Gateway")
+          .setMessage("Adres: http://127.0.0.1:8642\n\nTermux ~/.hermes/.env dosyasındaki API_SERVER_KEY değerini buraya yapıştır. Anahtar Android Keystore ile şifrelenir. Paylaşma.")
+          .setView(key).setNegativeButton("Kapat",null)
+          .setNeutralButton("Anahtarı sil",(d,w)->{
+              com.jarvis.kisisel.ai.HermesVault.clear(this);
+              reply("Hermes API anahtarı silindi.");
+          })
+          .setPositiveButton("Kaydet",(d,w)->{
+              String value=key.getText().toString().trim();
+              if(value.length()<32||value.contains(" ")||value.contains("\n")){
+                  reply("Anahtar geçersiz: en az 32 karakter olmalı.");return;
+              }
+              if(com.jarvis.kisisel.ai.HermesVault.put(this,value)){
+                  modelRouter.setMode("HERMES");
+                  showStatus("HERMES · BAĞLANDI");
+                  reply("Hermes anahtarı güvenle kaydedildi. Gateway Termux'ta çalışıyorsa sohbet edebilirsin.");
+              }else reply("Anahtar şifrelenemedi.");
+          }).show();
+    }
+    private void chooseVoice(){
+        if(speech==null || !ttsReady){reply("Türkçe ses motoru hazır değil.");return;}
+        java.util.ArrayList<android.speech.tts.Voice> turkish=new java.util.ArrayList<>();
+        java.util.Set<android.speech.tts.Voice> voices=speech.getVoices();
+        if(voices!=null)for(android.speech.tts.Voice v:voices){
+            if(v!=null&&v.getLocale()!=null&&"tr".equals(v.getLocale().getLanguage()))turkish.add(v);
+        }
+        if(turkish.isEmpty()){reply("Türkçe ses bulunamadı. Android metin okuma motorunu yüklemeyi deneyebilirsin.");return;}
+        java.util.Collections.sort(turkish,(a,b)->a.getName().compareTo(b.getName()));
+        String[] choices=new String[turkish.size()];
+        for(int i=0;i<turkish.size();i++){
+            android.speech.tts.Voice v=turkish.get(i);
+            choices[i]=v.getName()+(v.isNetworkConnectionRequired()?" • internet":" • cihaz");
+        }
+        new AlertDialog.Builder(this).setTitle("Türkçe ses seç")
+         .setMessage("Telefonun sağladığı sesler listelenir. Erkek sesi mevcutsa seçebilirsin. Ses testleri yalnızca kulaklıktan oynatılır.")
+         .setItems(choices,(d,index)->{
+             String name=turkish.get(index).getName();
+             int result=speech.setVoice(turkish.get(index));
+             if(result==TextToSpeech.SUCCESS){
+                 prefs.edit().putString("pandora_voice_name",name).apply();
+                 speech.setPitch(prefs.getFloat("pandora_voice_pitch",0.85f));
+                 reply("Ses tercihi kaydedildi: "+name);
+             }else reply("Seçilen ses kullanılamıyor.");
+         }).setNegativeButton("Kapat",null).show();
+    }
+    private void setPreferredVoice(){
+        if(speech==null||!ttsReady)return;
+        String selected=prefs.getString("pandora_voice_name","");
+        java.util.Set<android.speech.tts.Voice> voices=speech.getVoices();
+        if(voices!=null){
+           android.speech.tts.Voice maleCandidate=null;
+           for(android.speech.tts.Voice v:voices){
+               if(v==null||v.getLocale()==null||!"tr".equals(v.getLocale().getLanguage()))continue;
+               if(v.getName().equals(selected)){speech.setVoice(v);maleCandidate=null;break;}
+               String s=v.getName().toLowerCase(java.util.Locale.ROOT);
+               if(maleCandidate==null&&(s.contains("male")||s.contains("ahmet")||s.contains("emre")))maleCandidate=v;
+           }
+           if(selected.isEmpty()&&maleCandidate!=null)speech.setVoice(maleCandidate);
+        }
+        speech.setPitch(prefs.getFloat("pandora_voice_pitch",0.85f));
+        speech.setSpeechRate(prefs.getFloat("pandora_voice_rate",0.95f));
+    }
+    
     private void showSettings() {
         String[] options={
             voiceEnabled?"Sesli yanıt: AÇIK":"Sesli yanıt: KAPALI",
@@ -497,7 +862,10 @@ public class MainActivity extends Activity {
             "Hatırlatıcılar",
             "Konuşma geçmişini sil",
             "Gizlilik ve sınırlamalar",
-            "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI")
+            "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI"),
+            "Hermes API anahtarı / bağlantısı",
+            "Türkçe ses seç / erkek sesi varsa seç",
+            "Ses tonu: "+prefs.getFloat("pandora_voice_pitch",0.85f)+" (kulaklıkla)"
         };
         new AlertDialog.Builder(this).setTitle("PANDORA · AYARLAR").setItems(options,(d,which)->{
             switch(which){
@@ -520,6 +888,16 @@ public class MainActivity extends Activity {
                         memory.clearMessages();feed.removeAllViews();reply("Konuşma geçmişi silindi.");
                     }).show();break;
                 case 11:toggleScreenCloudConsent();break;
+                case 12:editHermesKey();break;
+                case 13:chooseVoice();break;
+                case 14:
+                    final String[] tones={"Daha tok (0.75)","Tok / doğal (0.85)","Normal (1.00)"};
+                    final float[] pitches={0.75f,0.85f,1.00f};
+                    new AlertDialog.Builder(this).setTitle("Ses tonu").setItems(tones,(dd,i)->{
+                        prefs.edit().putFloat("pandora_voice_pitch",pitches[i]).apply();
+                        if(speech!=null) speech.setPitch(pitches[i]);
+                        reply("Ses tonu kaydedildi. Ses yalnızca kulaklık bağlıyken çıkacak.");
+                    }).show();break;
                 case 10:new AlertDialog.Builder(this).setTitle("Gizlilik / sınırlar")
                     .setMessage("Hazır komutlar cihazda çalışır. Yerel mod 127.0.0.1:8080'e bağlanır. Bulut/Otomatik modlarını kendin seçtiğinde mesajların OpenRouter'ın bulut sağlayıcılarına iletilir. Notlar ve geçmiş varsayılan olarak buluta gönderilmez. Anahtar Android Keystore ile şifrelenir ancak telefona yüklü uygulamanın kullanıcı anahtarı kullanımı tamamen risksiz değildir. Bulut ücretsiz istek kotasına tabidir; model otomatik olarak ücretli modele geçmez. 8B yerel model bu telefonda yavaştır. Ses tanıma servisi ayrı internete bağlanabilir. Kesintisiz dinleme, WhatsApp görüşmesi kapatma, Binance hesabı, antivirüs, otomatik video yayınlama henüz yoktur.")
                     .setPositiveButton("Tamam",null).show();break;
@@ -545,12 +923,15 @@ public class MainActivity extends Activity {
     }
 
     private void chooseMode() {
-        String[] labels={"Yalnızca hazır komutlar", "Yerel (Termux:8080)", "Bulut (OpenRouter ücretsiz)", "Otomatik (önce bulut, sonra yerel)"};
-        String[] values={"OFF","LOCAL","CLOUD","AUTO"};
+        String[] labels={"Hermes Agent (Termux:8642)", "Yalnızca hazır komutlar", "Yerel (Termux:8080)", "Bulut (OpenRouter ücretsiz)", "Otomatik (önce bulut, sonra yerel)"};
+        String[] values={"HERMES","OFF","LOCAL","CLOUD","AUTO"};
         new AlertDialog.Builder(this).setTitle("Çalışma modu")
             .setSingleChoiceItems(labels,java.util.Arrays.asList(values).indexOf(modelRouter.mode()),(d,which)->{
                 d.dismiss();
                 String chosen=values[which];
+                if("HERMES".equals(chosen)&&!com.jarvis.kisisel.ai.HermesVault.exists(this)){
+                    editHermesKey();return;
+                }
                 if(("CLOUD".equals(chosen)||"AUTO".equals(chosen)) && !SecretVault.exists(this)){
                     new AlertDialog.Builder(this).setTitle("Önce ücretsiz bulut anahtarını ekle")
                         .setMessage("Bulut seçeneği için ücretsiz bir OpenRouter hesabı ve API anahtarı gerekiyor. Anahtarı buradaki sohbetimize gönderme. PANDORA Ayarlar içinde saklayacağız. Ücretli model çağrıları kapalıdır.")
@@ -669,7 +1050,7 @@ public class MainActivity extends Activity {
         final int generation=++requestGeneration;
         if(stopButton!=null)stopButton.setVisibility(View.VISIBLE);
         showStatus("YANIT BEKLENİYOR · "+modelRouter.modeLabel());
-        activeRequest=modelRouter.askAsync(prompt, (answer,source)->runOnUiThread(()->{
+        activeRequest=modelRouter.askAsync(agentPrompt(prompt), (answer,source)->runOnUiThread(()->{
             if(generation!=requestGeneration || isFinishing() || isDestroyed())return;
             modelBusy=false;
             activeRequest=null;
@@ -811,6 +1192,9 @@ public class MainActivity extends Activity {
     }
 
     private void toggleWakeMonitor() {
+        if(!WakeMonitorService.running && !PandoraAlerts.headsetConnected(this)){
+            Toast.makeText(this,"Hey Pandora yalnızca kulaklık bağlıyken çalışabilir.",Toast.LENGTH_LONG).show();return;
+        }
         if(WakeMonitorService.running) {
             stopService(new Intent(this,WakeMonitorService.class));
             Toast.makeText(this,"Dinleme durduruldu",Toast.LENGTH_SHORT).show();
@@ -864,19 +1248,20 @@ public class MainActivity extends Activity {
     }
 
     private void listen() {
+        if(!PandoraAlerts.headsetConnected(this)){Toast.makeText(this,"Kulaklık bağlı değil. Sesli giriş kapalı.",Toast.LENGTH_LONG).show();return;}
         Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"tr-TR");
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,"tr-TR");
         intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"PANDORA dinliyor...");
-        try {showStatus("DİNLİYOR...");orb.setActive(true);startActivityForResult(intent,VOICE_REQUEST);}
-        catch(ActivityNotFoundException ex){orb.setActive(false);showStatus("HAZIR");reply("Telefonda ses tanıma uygulaması bulunamadı. Yazılı komutları kullanabilirsin.");}
+        try {showStatus("DİNLİYOR...");orb.setActive(true);if(voiceOrb!=null)voiceOrb.setActive(true);startActivityForResult(intent,VOICE_REQUEST);}
+        catch(ActivityNotFoundException ex){orb.setActive(false);if(voiceOrb!=null)voiceOrb.setActive(false);showStatus("HAZIR");reply("Telefonda ses tanıma uygulaması bulunamadı. Yazılı komutları kullanabilirsin.");}
     }
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
         if(requestCode==VOICE_REQUEST) {
-            orb.setActive(false);showStatus("HAZIR · " + modelRouter.modeLabel());
+            orb.setActive(false);if(voiceOrb!=null)voiceOrb.setActive(false);showStatus("HAZIR · " + modelRouter.modeLabel());
             if(resultCode==RESULT_OK && data!=null) {
                 ArrayList<String> found=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
                 if(found!=null && !found.isEmpty())runCommand(found.get(0));
@@ -889,6 +1274,7 @@ public class MainActivity extends Activity {
     private void openUrl(String url) {launch(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));}
     @Override protected void onDestroy() {
         cancelModelRequest(false);
+        audioGuard.removeCallbacks(guardAudio);
         if(speech!=null){speech.stop();speech.shutdown();}
         if(memory!=null)memory.close();
         super.onDestroy();
