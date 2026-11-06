@@ -29,6 +29,8 @@ jobs:
         run: bash tests/RUN_TESTS.sh
       - name: Acoustic wake diagnostic (noise and TTS)
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends espeak-ng ffmpeg
           python3 -m pip install --user vosk==0.3.45
           python3 scripts/test_vosk_synth.py
       - name: Assemble installable Android APK
