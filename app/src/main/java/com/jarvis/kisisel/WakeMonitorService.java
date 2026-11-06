@@ -74,6 +74,8 @@ public final class WakeMonitorService extends Service {
     private boolean processingAction = false;
     private HttpAiProvider.CancelToken pendingModel;
     private com.jarvis.kisisel.core.CaptainTeam voiceTeam;
+    private PandoraCallResolver.Match pendingVoiceCall;
+    private long pendingVoiceCallExpiry=0;
     private MemoryDb pendingDatabase;
     private int modelGeneration = 0;
     private final Runnable retry = this::listenOnce;
@@ -273,6 +275,21 @@ public final class WakeMonitorService extends Service {
     private boolean answerGeneralQuestion(String phrase) {
         String prompt=phrase.trim().replaceFirst("(?iu)^(?:hey\\s+)?pandora[\\s,.:;!?]*","").trim();
         if(prompt.isEmpty())return finishScreenAction("PANDORA","Dinliyorum, ne yapmak istiyorsun?");
+        String low=prompt.toLowerCase(new Locale("tr","TR"));
+        if(low.equals("aramayı onayla") || low.equals("aramayı başlat")
+            || low.equals("ara onayla"))return confirmVoiceCall();
+        if(low.equals("aramayı iptal et") || low.equals("arama iptal")){
+            pendingVoiceCall=null;pendingVoiceCallExpiry=0;
+            return finishScreenAction("PANDORA · Arama","Bekleyen arama iptal edildi.");
+        }
+        if(low.endsWith(" ara") && low.length()>5
+            && !low.startsWith("internette ") && !low.startsWith("google ")
+            && !low.startsWith("youtube ")){
+            String target=prompt.replaceFirst("(?iu)\\s+ara$","")
+                .replaceFirst("(?iu)^(?:telefonla|numarayı|kişiyi)\\s+","").trim();
+            return prepareVoiceCall(target);
+        }
+
         // Hands-free manager dispatch needs no touch or screen visibility.
         if(prompt.toLowerCase(new Locale("tr","TR")).matches(
                 "^(?:ekibe|ekip|ekibime|müdür|müdüre)\\s+.{4,}$")) {
@@ -290,6 +307,59 @@ public final class WakeMonitorService extends Service {
             +"Telefonu veya diğer uygulamaları kendi başına kontrol etme. Eylem JSON'u üretme. "
             +"Yetkisiz bir işi yaptığını iddia etme. Kullanıcının sorusu: "+plain;
         return startModelQuery(question,"PANDORA · Yanıt",explicitHermes);
+    }
+
+    private boolean prepareVoiceCall(String requested){
+        if(PandoraAlerts.inCall(this))
+            return finishScreenAction("PANDORA · Telefon","Görüşme devam ederken arama başlatamam.");
+        if(PandoraCallResolver.phoneNumber(requested)==null &&
+            checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                !=PackageManager.PERMISSION_GRANTED)
+            return finishScreenAction("PANDORA · Telefon",
+                "Kişiyi aramak için Kişiler erişimini PANDORA Kurulum Merkezi'nden açmalısın.");
+        java.util.List<PandoraCallResolver.Match> matches=
+            PandoraCallResolver.resolve(this,requested);
+        if(matches.size()!=1){
+            return finishScreenAction("PANDORA · Telefon",
+                matches.isEmpty()?"Bu isimde kişi veya geçerli numara bulamadım. Arama yapılmadı.":
+                    "Bu isimde birden çok numara var. Tam adıyla veya numarasıyla tekrar söyle.");
+        }
+        pendingVoiceCall=matches.get(0);
+        pendingVoiceCallExpiry=android.os.SystemClock.elapsedRealtime()+35000L;
+        return finishScreenAction("PANDORA · Sesli arama onayı",
+            pendingVoiceCall.label+" kişisini "+pendingVoiceCall.number+
+            " numarasından aramamı istedin. Aramayı başlatmak için "
+            +"Pandora, aramayı onayla de. İptal etmek için Pandora, aramayı iptal et de.");
+    }
+    private boolean confirmVoiceCall(){
+        PandoraCallResolver.Match target=pendingVoiceCall;
+        pendingVoiceCall=null;
+        long expiry=pendingVoiceCallExpiry;
+        pendingVoiceCallExpiry=0L;
+        if(target==null||android.os.SystemClock.elapsedRealtime()>expiry)
+            return finishScreenAction("PANDORA · Telefon",
+                "Onay bekleyen bir arama yok. Kimi arayacağımı tekrar söyle.");
+        if(checkSelfPermission(Manifest.permission.CALL_PHONE)
+            !=PackageManager.PERMISSION_GRANTED)
+            return finishScreenAction("PANDORA · Telefon",
+                "Telefon araması Android tarafından yetkilendirilmedi. "
+                 +"PANDORA Kurulum Merkezi'nden arama izni vermen gerekiyor.");
+        try{
+            android.telecom.TelecomManager telecom=
+                (android.telecom.TelecomManager)getSystemService(TELECOM_SERVICE);
+            if(telecom==null)
+                return finishScreenAction("PANDORA · Telefon",
+                    "Android telefon servisi kullanılamıyor.");
+            telecom.placeCall(android.net.Uri.fromParts("tel",target.number,null),
+                new Bundle());
+            return finishScreenAction("PANDORA · Telefon",
+                "Android'e "+target.label+" için arama isteğini gönderdim. "
+                +"Çağrının bağlandığını doğrulayamıyorum.");
+        }catch(SecurityException | IllegalArgumentException | IllegalStateException e){
+            return finishScreenAction("PANDORA · Telefon",
+                "Android aramayı başlatmayı engelledi. "
+                +"Telefon uygulamasından yeniden deneyebilirsin.");
+        }
     }
 
     private boolean startVoiceTeam(String goal){
@@ -440,6 +510,7 @@ public final class WakeMonitorService extends Service {
         processingAction=false;
         conversation.reset();
         ++modelGeneration;
+        pendingVoiceCall=null;pendingVoiceCallExpiry=0L;
         if(voiceTeam!=null){voiceTeam.close();voiceTeam=null;}
         if(pendingModel!=null)pendingModel.cancel();
         pendingModel=null;
