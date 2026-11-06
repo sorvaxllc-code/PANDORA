@@ -124,7 +124,7 @@ public final class OfflineVoice implements AutoCloseable {
         long lastRouteCheck=0;
         try{
             wake=new Recognizer(wakeModel,16000f,
-                "[\"hey pandora\",\"hi pandora\",\"[unk]\"]");
+                "[\"pandora\",\"hey pandora\",\"hi pandora\",\"[unk]\"]");
             wake.setWords(true);
             command=new Recognizer(turkishModel,16000f);
             command.setWords(true);
@@ -185,7 +185,7 @@ public final class OfflineVoice implements AutoCloseable {
                         nextRouteAttempt=SystemClock.elapsedRealtime()+16000;
                         continue;
                     }
-                    notifyState("Kulaklık mikrofonu etkin · Hey Pandora için hazır");
+                    notifyState("Kulaklık mikrofonu etkin · Pandora için hazır");
                     reset=true;
                     lastRouteCheck=SystemClock.elapsedRealtime();
                 }
@@ -227,19 +227,40 @@ public final class OfflineVoice implements AutoCloseable {
                 long voiced=voicedDuration(frame,count);
                 if(!activated){
                     wakeVoicedMs+=voiced;
+                    // Both decoders hear the SAME pre-wake utterance, allowing
+                    // "Pandora, bunu yap" as one spoken sentence.
+                    boolean cmdDone=command.acceptWaveForm(frame,count);
                     boolean complete=wake.acceptWaveForm(frame,count);
-                    if(!complete)continue;  // NEVER activate on partial guesses.
+                    if(!complete)continue;  // NEVER act on Vosk partial guesses.
                     JSONObject done=parsed(wake.getResult());
                     String text=transcription(done);
                     boolean verified=WakePhraseGate.verified(
                         text,confidence(done),wakeVoicedMs);
+                    JSONObject speech=parsed(cmdDone
+                        ? command.getResult():command.getFinalResult());
+                    String full=transcription(speech);
+                    double fullConfidence=confidence(speech);
+                    command.reset();
                     wake.reset();wakeVoicedMs=0;
                     if(verified){
-                        activated=true;
-                        command.reset();commandVoicedMs=0;
-                        wakeDeadline=SystemClock.elapsedRealtime()+13000L;
-                        notifyState("Hey Pandora algılandı · komutunu dinliyorum");
+                        String suffix=WakeWordMatcher.matches(full)
+                            ? full.replaceFirst("(?iu)^(?:hey\\s+)?pandora\\s*[,!?;:]?\\s*","").trim()
+                            : "";
                         main.post(()->{if(!closed && !muted)listener.wake();});
+                        if(suffix.length()>1 && (fullConfidence<0 || fullConfidence>=0.40)){
+                            // The entire command arrived after the wake word in
+                            // the first utterance: no repeated wake word required.
+                            muted=true;
+                            activated=false;
+                            final String commandText="pandora "+suffix;
+                            notifyState("Komut alındı · yanıt hazırlanıyor");
+                            main.post(()->{if(!closed)listener.result(commandText);});
+                        }else{
+                            activated=true;
+                            commandVoicedMs=0;
+                            wakeDeadline=SystemClock.elapsedRealtime()+13000L;
+                            notifyState("Pandora algılandı · komutunu dinliyorum");
+                        }
                     }
                 }else{
                     commandVoicedMs+=voiced;
@@ -263,7 +284,7 @@ public final class OfflineVoice implements AutoCloseable {
                         activated=false;
                         command.reset();
                         wake.reset();
-                        notifyState("Hey Pandora için hazır");
+                        notifyState("Pandora için hazır");
                     }else{
                         command.reset();
                         commandVoicedMs=0;
