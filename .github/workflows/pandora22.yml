@@ -2,8 +2,6 @@ name: PANDORA 23 — Offline Silent Wake Android
 on:
   push:
     branches: [pandora23-quiet-offline-wake]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 jobs:
   android:
