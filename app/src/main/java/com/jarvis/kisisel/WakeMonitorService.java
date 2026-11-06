@@ -16,8 +16,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.media.AudioAttributes;
 import android.content.SharedPreferences;
-import android.speech.RecognitionListener;
-import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import com.jarvis.kisisel.ai.ModelRouter;
@@ -31,14 +29,14 @@ import java.util.Locale;
  * Android's system speech recognition is not a reliable always-on wake-word engine.
  * The installed speech service may process audio remotely, even with offline preference.
  */
-public final class WakeMonitorService extends Service implements RecognitionListener {
+public final class WakeMonitorService extends Service {
     public static final String ACTION_START = "com.jarvis.kisisel.START_WAKE";
     public static final String ACTION_STOP = "com.jarvis.kisisel.STOP_WAKE";
     public static final String ACTION_SCREEN = "com.jarvis.kisisel.ANALYZE_CURRENT_SCREEN";
     public static final String ACTION_VIDEO = "com.jarvis.kisisel.UPGRADE_WHATSAPP_VIDEO";
     public static volatile boolean running = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private SpeechRecognizer recognizer;
+    private OfflineVoice offline;
     private TextToSpeech tts;
     private boolean ttsReady = false;
     private boolean speaking = false;
@@ -67,7 +65,6 @@ public final class WakeMonitorService extends Service implements RecognitionList
             handler.postDelayed(this,250);
         }
     };
-    private boolean listening = false;
     private boolean headsetPaused = false;
     private final WakeConversationState conversation = new WakeConversationState();
     private boolean processingAction = false;
@@ -78,7 +75,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
     // Stop hotword detection and TTS promptly when headphones disconnect.
     // An enabled monitor stays alive but CAPTURES NO AUDIO when headphones disconnect
     // or a phone call is active. It resumes after headphones reconnect.
-    private final Runnable headsetSafety = new Runnable(){
+    private final Runnable headsetSafety=new Runnable(){
         @Override public void run(){
             if(stopped)return;
             boolean allowed=PandoraAlerts.headsetConnected(WakeMonitorService.this)
@@ -86,20 +83,18 @@ public final class WakeMonitorService extends Service implements RecognitionList
             if(!allowed && !headsetPaused){
                 headsetPaused=true;
                 handler.removeCallbacks(retry);
-                if(recognizer!=null && listening)try{recognizer.cancel();}catch(RuntimeException ignored){}
-                listening=false;
+                if(offline!=null)offline.pause();
                 if(tts!=null)tts.stop();
                 speaking=false;
                 handler.removeCallbacks(headphoneGuard);
                 handler.removeCallbacks(speechTimeout);
             }else if(allowed && headsetPaused){
                 headsetPaused=false;
-                if(!processingAction && !speaking)restart(500);
+                if(!processingAction && !speaking)restart(450);
             }
-            handler.postDelayed(this,550);
+            handler.postDelayed(this,500);
         }
     };
-
     @Override public void onCreate() {
         super.onCreate();
         tts = new TextToSpeech(this, status -> handler.post(() -> {
@@ -161,32 +156,35 @@ public final class WakeMonitorService extends Service implements RecognitionList
         running = true;
         headsetPaused = !PandoraAlerts.headsetConnected(this) || PandoraAlerts.inCall(this);
         handler.postDelayed(headsetSafety,350);
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            PandoraAlerts.postImportant(this,"PANDORA","Ses tanıma hizmeti bulunamadı; dinleme kapatıldı.");
-            stopSelf(); return START_NOT_STICKY;
-        }
-        try {
-            // Prefer local speech processing on Android 12+; system fallback may use network.
-            if(Build.VERSION.SDK_INT>=31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this))
-                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
-            else recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(this);
-            handler.postDelayed(retry, 350);
-        } catch (RuntimeException e) { stopSelf(); }
+        offline=new OfflineVoice(this,new OfflineVoice.Listener(){
+            @Override public void partial(String phrase){
+                if(stopped||headsetPaused||speaking||processingAction)return;
+                OverlayPulse.show(WakeMonitorService.this);
+            }
+            @Override public void result(String phrase){
+                if(stopped||headsetPaused||speaking||processingAction)return;
+                Bundle result=new Bundle();
+                ArrayList<String> values=new ArrayList<>();
+                values.add(phrase);
+                result.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,values);
+                hear(result);
+                if(offline!=null)offline.pause();
+                if(!speaking&&!processingAction)restart(700);
+            }
+            @Override public void error(String reason){
+                if(stopped)return;
+                PandoraAlerts.postImportant(WakeMonitorService.this,
+                    "PANDORA · Sessiz ses algılayıcı",reason);
+                stopSelf();
+            }
+        });
+        if(!headsetPaused)offline.resume();
         return START_NOT_STICKY;
     }
-    private void listenOnce() {
-        if (stopped || recognizer == null || listening || speaking || processingAction) return;
-        if(headsetPaused || !PandoraAlerts.headsetConnected(this) || PandoraAlerts.inCall(this))return;
-        try {
-            Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR");
-            request.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-            request.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
-            listening = true;
-            recognizer.startListening(request);
-        } catch (RuntimeException e) { listening = false; restart(3000); }
+    private void listenOnce(){
+        if(stopped||headsetPaused||speaking||processingAction)return;
+        if(!PandoraAlerts.headsetConnected(this)||PandoraAlerts.inCall(this))return;
+        if(offline!=null)offline.resume();
     }
     private void restart(long delayMs) {
         if (stopped) return;
@@ -257,10 +255,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         // The mic is often unavailable during WhatsApp calls. Notification shortcuts
         // do not require speech recognition and still obey the accessibility permission.
         handler.removeCallbacks(retry);
-        if(recognizer!=null && listening) {
-            try { recognizer.cancel(); } catch(RuntimeException ignored) {}
-            listening=false;
-        }
+        if(offline!=null)offline.pause();
         OverlayPulse.show(this);
         // Tapping a notification can leave Android's notification shade on top of X.
         // Dismiss only the shade when it is actually visible; do not leave the app.
@@ -360,30 +355,8 @@ public final class WakeMonitorService extends Service implements RecognitionList
             restart(650);
         });
     }
-    @Override public void onReadyForSpeech(Bundle params) {}
-    @Override public void onBeginningOfSpeech() {}
-    @Override public void onRmsChanged(float rmsdB) {}
-    @Override public void onBufferReceived(byte[] buffer) {}
-    @Override public void onEndOfSpeech() {}
-    @Override public void onError(int error) {
-        listening = false;
-        if(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){
-            stopSelf();return;
-        }
-        if (speaking || processingAction) return;
-        // A busy recognizer or other app using the microphone can interrupt listening.
-        restart((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
-                 error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) ? 5000 : 1500);
-    }
-    @Override public void onResults(Bundle results) {
-        listening = false;
-        if (!hear(results)) restart(1900);
-    }
-    // Partial recognition is often just the wake word: wait for a final transcript.
-    @Override public void onPartialResults(Bundle partialResults) { }
-    @Override public void onEvent(int eventType, Bundle params) {}
     @Override public void onDestroy() {
-        stopped = true; running = false; listening = false; speaking = false; headsetPaused = false;
+        stopped = true; running = false; speaking = false; headsetPaused = false;
         processingAction=false;
         conversation.reset();
         ++modelGeneration;
@@ -391,7 +364,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         pendingModel=null;
         closePendingDatabase();
         handler.removeCallbacksAndMessages(null);
-        if (recognizer != null) { recognizer.cancel(); recognizer.destroy(); recognizer = null; }
+        if(offline!=null){offline.close();offline=null;}
         if (tts != null) { tts.stop(); tts.shutdown(); tts = null; }
         super.onDestroy();
     }
