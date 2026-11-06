@@ -385,8 +385,7 @@ public final class WakeMonitorService extends Service {
         handler.postDelayed(()->{
             if(stopped || generation!=modelGeneration || !processingAction)return;
             ++modelGeneration;
-            if(voiceTeam!=null){voiceTeam.close();voiceTeam=null;}
-        if(pendingModel!=null)pendingModel.cancel();
+            if(pendingModel!=null)pendingModel.cancel();
             pendingModel=null;
             closePendingDatabase();
             finishScreenAction(title,"Yapay zekâ zamanında yanıt vermedi; işlem durduruldu.");
@@ -441,6 +440,7 @@ public final class WakeMonitorService extends Service {
         processingAction=false;
         conversation.reset();
         ++modelGeneration;
+        if(voiceTeam!=null){voiceTeam.close();voiceTeam=null;}
         if(pendingModel!=null)pendingModel.cancel();
         pendingModel=null;
         closePendingDatabase();
