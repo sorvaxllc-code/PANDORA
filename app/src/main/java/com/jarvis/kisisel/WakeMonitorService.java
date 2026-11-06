@@ -68,6 +68,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
         }
     };
     private boolean listening = false;
+    private boolean headsetPaused = false;
     private final WakeConversationState conversation = new WakeConversationState();
     private boolean processingAction = false;
     private HttpAiProvider.CancelToken pendingModel;
@@ -75,16 +76,27 @@ public final class WakeMonitorService extends Service implements RecognitionList
     private int modelGeneration = 0;
     private final Runnable retry = this::listenOnce;
     // Stop hotword detection and TTS promptly when headphones disconnect.
+    // An enabled monitor stays alive but CAPTURES NO AUDIO when headphones disconnect
+    // or a phone call is active. It resumes after headphones reconnect.
     private final Runnable headsetSafety = new Runnable(){
         @Override public void run(){
             if(stopped)return;
-            if(!PandoraAlerts.headsetConnected(WakeMonitorService.this)){
-                if(recognizer!=null)recognizer.cancel();
+            boolean allowed=PandoraAlerts.headsetConnected(WakeMonitorService.this)
+                && !PandoraAlerts.inCall(WakeMonitorService.this);
+            if(!allowed && !headsetPaused){
+                headsetPaused=true;
+                handler.removeCallbacks(retry);
+                if(recognizer!=null && listening)try{recognizer.cancel();}catch(RuntimeException ignored){}
+                listening=false;
                 if(tts!=null)tts.stop();
-                stopSelf();
-                return;
+                speaking=false;
+                handler.removeCallbacks(headphoneGuard);
+                handler.removeCallbacks(speechTimeout);
+            }else if(allowed && headsetPaused){
+                headsetPaused=false;
+                if(!processingAction && !speaking)restart(500);
             }
-            handler.postDelayed(this,350);
+            handler.postDelayed(this,550);
         }
     };
 
@@ -130,9 +142,8 @@ public final class WakeMonitorService extends Service implements RecognitionList
             return START_NOT_STICKY;
         }
         if (running) return START_NOT_STICKY;
-        if(!PandoraAlerts.headsetConnected(this)){
-            stopSelf();return START_NOT_STICKY;
-        }
+        // Start is allowed only from a visible activity with microphone permission;
+        // if the headset disappears later, remain paused without capturing sound.
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY;
         }
@@ -148,13 +159,17 @@ public final class WakeMonitorService extends Service implements RecognitionList
             stopSelf(); return START_NOT_STICKY;
         }
         running = true;
+        headsetPaused = !PandoraAlerts.headsetConnected(this) || PandoraAlerts.inCall(this);
         handler.postDelayed(headsetSafety,350);
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             PandoraAlerts.postImportant(this,"PANDORA","Ses tanıma hizmeti bulunamadı; dinleme kapatıldı.");
             stopSelf(); return START_NOT_STICKY;
         }
         try {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            // Prefer local speech processing on Android 12+; system fallback may use network.
+            if(Build.VERSION.SDK_INT>=31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this))
+                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
+            else recognizer = SpeechRecognizer.createSpeechRecognizer(this);
             recognizer.setRecognitionListener(this);
             handler.postDelayed(retry, 350);
         } catch (RuntimeException e) { stopSelf(); }
@@ -162,7 +177,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
     }
     private void listenOnce() {
         if (stopped || recognizer == null || listening || speaking || processingAction) return;
-        if(!PandoraAlerts.headsetConnected(this)){stopSelf();return;}
+        if(headsetPaused || !PandoraAlerts.headsetConnected(this) || PandoraAlerts.inCall(this))return;
         try {
             Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -219,7 +234,9 @@ public final class WakeMonitorService extends Service implements RecognitionList
                     return answerGeneralQuestion(phrase);
             }
             OverlayPulse.show(this);
-            PandoraAlerts.postImportant(this,"PANDORA · Sesli komut",response);
+            // No wake beep and no notification for hearing "Hey Pandora" alone.
+            if(kind!=WakeQuickCommand.Kind.WAKE_ONLY)
+                PandoraAlerts.postImportant(this,"PANDORA · Sesli komut",response);
             // Spoken replies stay headphone-only, as requested by the user.
             return speakDirectResponse(response);
         }
@@ -278,7 +295,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
                 "Bu soruyu yanıtlamak için PANDORA'da yerel veya bulut yapay zekâ modunu açmalısın.");
         }
         processingAction=true;
-        PandoraAlerts.postImportant(this,title,"Yanıt hazırlanıyor.");
+        // Preparing a reply is silent: Android keeps only the microphone FGS indicator.
         final int generation=++modelGeneration;
         try {
             pendingModel=router.askInformationalAsync(prompt,(answer,source)->handler.post(()->{
@@ -366,7 +383,7 @@ public final class WakeMonitorService extends Service implements RecognitionList
     @Override public void onPartialResults(Bundle partialResults) { }
     @Override public void onEvent(int eventType, Bundle params) {}
     @Override public void onDestroy() {
-        stopped = true; running = false; listening = false; speaking = false;
+        stopped = true; running = false; listening = false; speaking = false; headsetPaused = false;
         processingAction=false;
         conversation.reset();
         ++modelGeneration;
