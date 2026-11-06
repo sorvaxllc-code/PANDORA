@@ -25,9 +25,9 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 /**
- * User-initiated EXPERIMENTAL recognizer loop.
- * Android's system speech recognition is not a reliable always-on wake-word engine.
- * The installed speech service may process audio remotely, even with offline preference.
+ * Offline continuous headset hotword service. It never calls Android SpeechRecognizer.
+ * A foreground microphone indicator is required by Android; spoken requests are
+ * forwarded to Hermes only after a verified "Hey Pandora" and command.
  */
 public final class WakeMonitorService extends Service {
     public static final String ACTION_START = "com.jarvis.kisisel.START_WAKE";
@@ -35,6 +35,10 @@ public final class WakeMonitorService extends Service {
     public static final String ACTION_SCREEN = "com.jarvis.kisisel.ANALYZE_CURRENT_SCREEN";
     public static final String ACTION_VIDEO = "com.jarvis.kisisel.UPGRADE_WHATSAPP_VIDEO";
     public static volatile boolean running = false;
+    public static volatile String microphoneState="Kapalı";
+    public static volatile long lastWakeMs=0L;
+    public static volatile String lastError="";
+    public static volatile boolean audioReady=false;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private OfflineVoice offline;
     private TextToSpeech tts;
@@ -154,27 +158,45 @@ public final class WakeMonitorService extends Service {
             stopSelf(); return START_NOT_STICKY;
         }
         running = true;
+        microphoneState="Çevrimdışı modeller hazırlanıyor";
+        audioReady=false;
+        lastError="";
         headsetPaused = !PandoraAlerts.headsetConnected(this) || PandoraAlerts.inCall(this);
         handler.postDelayed(headsetSafety,350);
         offline=new OfflineVoice(this,new OfflineVoice.Listener(){
-            @Override public void partial(String phrase){
-                if(stopped||headsetPaused||speaking||processingAction)return;
+            @Override public void wake(){
+                if(stopped || headsetPaused || speaking || processingAction)return;
+                lastWakeMs=android.os.SystemClock.elapsedRealtime();
+                microphoneState="Hey Pandora algılandı · komut dinleniyor";
                 OverlayPulse.show(WakeMonitorService.this);
+                // Deliberately no beep / TTS. The headphone will not chime on
+                // random sounds, and the assistant won't recognize its own cue.
             }
             @Override public void result(String phrase){
-                if(stopped||headsetPaused||speaking||processingAction)return;
+                if(stopped || headsetPaused || speaking || processingAction)return;
                 Bundle result=new Bundle();
                 ArrayList<String> values=new ArrayList<>();
                 values.add(phrase);
                 result.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,values);
                 hear(result);
                 if(offline!=null)offline.pause();
-                if(!speaking&&!processingAction)restart(700);
+                if(!speaking&&!processingAction)restart(650);
+            }
+            @Override public void status(String state){
+                if(stopped)return;
+                microphoneState=state;
+                audioReady=state.contains("Kulaklık mikrofonu etkin")
+                    || state.contains("Hey Pandora için hazır")
+                    || state.contains("komutunu dinliyorum")
+                    || state.contains("Komut alındı");
             }
             @Override public void error(String reason){
                 if(stopped)return;
+                microphoneState=reason;
+                lastError=reason;
+                audioReady=false;
                 PandoraAlerts.postImportant(WakeMonitorService.this,
-                    "PANDORA · Sessiz ses algılayıcı",reason);
+                    "PANDORA · Ses sistemi",reason);
                 stopSelf();
             }
         });
@@ -357,6 +379,8 @@ public final class WakeMonitorService extends Service {
     }
     @Override public void onDestroy() {
         stopped = true; running = false; speaking = false; headsetPaused = false;
+        microphoneState="Kapalı";
+        audioReady=false;
         processingAction=false;
         conversation.reset();
         ++modelGeneration;
