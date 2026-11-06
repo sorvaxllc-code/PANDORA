@@ -78,7 +78,7 @@ public final class PandoraAlerts {
                 .addAction(android.R.drawable.ic_menu_view, "Ekrana bak", screenIntent)
                 .addAction(android.R.drawable.ic_menu_camera, "Görüntülüye geç", videoIntent)
                 .addAction(android.R.drawable.ic_media_pause, "Durdur", stopIntent)
-                .setOngoing(true).setSilent(true).setCategory(Notification.CATEGORY_SERVICE)
+                .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).build();
     }
     public static boolean headsetConnected(Context context) {
