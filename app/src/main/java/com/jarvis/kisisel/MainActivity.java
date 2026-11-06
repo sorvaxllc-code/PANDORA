@@ -371,7 +371,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams waveLp=lp(-1,dp(32));
         waveLp.topMargin=dp(1);
         home.addView(waveform,waveLp);
-        listenIndicator=text("Kulaklıkla Hey Pandora için hazır",13,0xFFEAE5FF,false);
+        listenIndicator=text("Kulaklıkla Pandora için hazır",13,0xFFEAE5FF,false);
         listenIndicator.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams li=lp(-1,dp(31));home.addView(listenIndicator,li);
 
@@ -401,6 +401,11 @@ public class MainActivity extends Activity {
             "Araştır, planla, analiz et veya mesaj yaz...",0xFFA765FF,()->switchPage(1));
         LinearLayout.LayoutParams sug=lp(-1,dp(79));sug.topMargin=dp(10);
         home.addView(suggestion,sug);
+        TextView manager=actionTile("✦  PANDORA · Genel Müdür",
+            "Uzman ekibe gerçek görev dağıt · Sonuç raporu",
+            0xFFC48DFF,()->showCaptainPanel());
+        LinearLayout.LayoutParams mgl=lp(-1,dp(74));mgl.topMargin=dp(9);
+        home.addView(manager,mgl);
         TextView agent=actionTile("✧  Aktif ajan: "+activeAgent,
             "Uzman ajanını değiştirmek için dokun",agentColor,()->switchPage(2));
         LinearLayout.LayoutParams agp=lp(-1,dp(73));agp.topMargin=dp(9);
@@ -485,6 +490,11 @@ public class MainActivity extends Activity {
             {"Yazılım","Kod, uygulama ve otomasyon desteği","#F1C152","#A685FF"},
             {"Yaratıcı","Metin, görsel ve fikir geliştirme","#F26ACE","#A76AFF"},
             {"Planlayıcı","Hedef, takvim ve günlük düzen","#9A69FF","#3DD0FF"},
+            {"Grafik & Kripto","Teknik indikatörler, koşullu senaryolar, risk","#FF746C","#AE74FF"},
+            {"Fiyat Analizi","Ürün fiyatı, maliyet, rekabet, karşılaştırma","#FFB14B","#F47FFF"},
+            {"Haber İzleme","Kaynak doğrulama, gündem, bağlantı durumu","#65E0FF","#B285FF"},
+            {"Sosyal Medya","X ve Telegram için içerik, kaynak, yayın analizi","#4F9CFF","#BF7AFF"},
+            {"Görsel","Görsel üretim briefi, konsept ve yaratıcı yön","#F27CFA","#39BFFF"},
             {"Genel","Her konuda kişisel yardım","#A969FF","#37BEFF"}
         };
         for(String[] spec:list){
@@ -527,7 +537,7 @@ public class MainActivity extends Activity {
             "Uzman model çağrıları ve rapor",0xFFC285FF,()->showCaptainPanel());
         addToolsCard(toolBody,"Ekip raporları",
             "Önceden tamamlanmış görevler",0xFF4EC9FF,()->showCaptainHistory());
-        addToolsCard(toolBody,"Hey Pandora · Sessiz uyandırma",
+        addToolsCard(toolBody,"Pandora · Sessiz uyandırma",
             "Gerçek kulaklık mikrofonuyla yerel algılama",0xFFA76DFF,()->toggleWakeMonitor());
         addToolsCard(toolBody,"Ses & mikrofon kontrolü",
             "Algılayıcı durumu, son Hey Pandora ve Bluetooth mikrofonu",0xFF3DD6EA,
@@ -605,7 +615,7 @@ public class MainActivity extends Activity {
         voice.addView(voiceOrb,vparams);
         voiceIndicator=text("Kulaklık bağlandığında hazır",13,0xFFE7DBFF,false);
         voiceIndicator.setGravity(Gravity.CENTER);voice.addView(voiceIndicator);
-        TextView explain=text("Hey Pandora de. Etkinleştirme sesi yok; yanıtlar yalnızca kulaklıktan verilir.",12,MUTED,false);
+        TextView explain=text("Pandora de, sonra komutunu söyle. Hey Pandora da çalışır. Yanıtlar kulaklıktan verilir.",12,MUTED,false);
         explain.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams explp=lp(-1,-2);explp.topMargin=dp(15);
         voice.addView(explain,explp);
