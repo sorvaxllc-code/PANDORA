@@ -1,0 +1,82 @@
+name: PANDORA 26 — Captain Manager + Headset & Screen
+on:
+  push:
+    branches: [pandora26-captain-team-permissions]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+      - name: Verify and stage Vosk offline voice models
+        run: python3 scripts/prepare_voice_model.py
+      - name: All Java safety/routing tests
+        run: bash tests/RUN_TESTS.sh
+      - name: Assemble Android debug APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify Android debug APK signature
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | head -4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA26-TEST-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Prepare stable signing keys if configured
+        id: signing
+        shell: bash
+        env:
+          KEY_B64: ${{ secrets.PANDORA_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEY_B64" || -z "$PASSWORD" ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No stable signing credentials; debug APK still available"
+            exit 0
+          fi
+          umask 077
+          echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/pandora.p12"
+          test -s "$RUNNER_TEMP/pandora.p12"
+          echo "PANDORA_KEYSTORE_PATH=$RUNNER_TEMP/pandora.p12" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+      - name: Assemble PANDORA 26 stable upgrade
+        if: steps.signing.outputs.available == 'true'
+        env:
+          PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            app/build/outputs/apk/release/app-release.apk
+      - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.available == 'true'
+        with:
+          name: PANDORA26-STABLE-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          if [[ -n "$PANDORA_KEYSTORE_PATH" ]]; then rm -f "$PANDORA_KEYSTORE_PATH"; fi
