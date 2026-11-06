@@ -583,6 +583,9 @@ public class MainActivity extends Activity {
             0xFFB49CFF,()->showPermissionsWizard());
         addToolsCard(toolBody,"Ekran analizi",
             "Hızlı Ayarlar ve izinli ekran okuma",0xFF50BFFF,()->showQuickTileSetup());
+        addToolsCard(toolBody,"Telefon araması",
+            "Kişi veya numara bul; onayla ve Android aramasını başlat",
+            0xFF4FDDF5,()->promptPhoneCall());
         addToolsCard(toolBody,"Telefon yetkileri",
             "Erişilebilirlik ve uygulama izinleri",0xFFB979FA,()->openScreenAccessibilitySettings());
         addToolsCard(toolBody,"Sistem durumu",
@@ -956,6 +959,18 @@ public class MainActivity extends Activity {
             q.startsWith("ekibime ")) {
             String goal=q.replaceFirst("^(?:ekibe|müdür|müdüre|ekip|ekibime)\\s+","").trim();
             if(goal.length()>3){startCaptainTask(goal);return;}
+        }
+        // "Pandora, Ali'yi ara" is a real call intent; no fake model reply.
+        // Other web-search commands are handled separately below.
+        if((q.endsWith(" ara")||q.endsWith(" ara.")) &&
+            !q.startsWith("internette ") && !q.startsWith("google ") &&
+            !q.startsWith("youtube ") && q.length()>5){
+            String target=command.replaceFirst("(?iu)\\s+ara[.]?$","")
+                .replaceFirst("(?iu)^(?:telefonla|kişiyi|kişisini|numarayı)\\s+","").trim();
+            if(target.matches("(?s).{2,90}")){
+                target=target.replaceFirst("(?iu)(?:'y[ıiuü]|'i|'ı|\u2019yi)$","");
+                showPhoneCallConfirmation(target);return;
+            }
         }
         if(skillRegistry.tryHandle(this,q,this::reply)) return;
         if (q.contains("ekrana bak") || q.contains("ekranı analiz") ||
@@ -1761,6 +1776,80 @@ public class MainActivity extends Activity {
                 prepareAutoWake();showVoiceDiagnostics();
             }).show();
     }
+    private void promptPhoneCall(){
+        EditText who=new EditText(this);
+        who.setSingleLine(true);
+        who.setHint("Telefon numarası veya kayıtlı kişi adı");
+        new AlertDialog.Builder(this)
+            .setTitle("PANDORA · Telefon araması")
+            .setMessage("Aramadan önce kişi ve numarayı sen doğrularsın. Kişiler yalnızca telefonda aranır.")
+            .setView(who).setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Bul",(d,w)->showPhoneCallConfirmation(who.getText().toString()))
+            .show();
+    }
+    private void showPhoneCallConfirmation(String input){
+        String target=input==null?"":input.trim();
+        if(target.length()<2||target.length()>90){
+            Toast.makeText(this,"Geçerli kişi adı veya telefon numarası yaz.",Toast.LENGTH_LONG).show();
+            return;
+        }
+        String direct=PandoraCallResolver.phoneNumber(target);
+        if(direct==null && checkSelfPermission(Manifest.permission.READ_CONTACTS)
+            !=PackageManager.PERMISSION_GRANTED){
+            new AlertDialog.Builder(this).setTitle("Kişiler erişim izni gerekli")
+                .setMessage("Kayıtlı kişiyi bulmak için Android'in Kişiler izni gerekir. İzin verince arama isteğini yeniden söyleyebilirsin.")
+                .setNegativeButton("İptal",null)
+                .setPositiveButton("İzin iste",(d,w)->
+                    requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},46))
+                .show();
+            return;
+        }
+        java.util.List<PandoraCallResolver.Match> found=
+            PandoraCallResolver.resolve(this,target);
+        if(found.isEmpty()){
+            reply("Aranacak kişi veya geçerli numara bulunamadı. Arama yapılmadı.");
+            return;
+        }
+        if(found.size()==1){
+            confirmRealCall(found.get(0));return;
+        }
+        String[] labels=new String[found.size()];
+        for(int i=0;i<found.size();i++){
+            PandoraCallResolver.Match match=found.get(i);
+            labels[i]=match.label+" · "+match.number;
+        }
+        new AlertDialog.Builder(this).setTitle("Hangi numarayı arayayım?")
+            .setItems(labels,(d,w)->confirmRealCall(found.get(w)))
+            .setNegativeButton("Arama yapma",null).show();
+    }
+    private void confirmRealCall(PandoraCallResolver.Match contact){
+        new AlertDialog.Builder(this).setTitle("Arama onayı")
+            .setMessage(contact.label+"\n"+contact.number+
+                "\n\nBu numara aransın mı? Telefon ücreti operatörüne bağlıdır.")
+            .setNegativeButton("Vazgeç",null)
+            .setNeutralButton("Numarayı çevir",(d,w)->{
+                Intent intent=new Intent(Intent.ACTION_DIAL,
+                    Uri.fromParts("tel",contact.number,null));
+                launch(intent);
+                addBubble(false,"Arama ekranı açıldı; arama henüz başlatılmadı.",false);
+            })
+            .setPositiveButton("Ara",(d,w)->{
+                if(checkSelfPermission(Manifest.permission.CALL_PHONE)
+                    !=PackageManager.PERMISSION_GRANTED){
+                    requestPhonePermission();
+                    return;
+                }
+                try{
+                    startActivity(new Intent(Intent.ACTION_CALL,
+                        Uri.fromParts("tel",contact.number,null)));
+                    addBubble(false,"Android'e "+contact.label+
+                        " için arama isteği gönderildi. Çağrının bağlandığını henüz doğrulamadım.",false);
+                }catch(SecurityException | android.content.ActivityNotFoundException ex){
+                    reply("Android aramayı engelledi. Telefon uygulamasını açıp tekrar deneyebilirsin.");
+                }
+            }).show();
+    }
+
     private void requestPhonePermission(){
         if(checkSelfPermission(Manifest.permission.CALL_PHONE)
             ==PackageManager.PERMISSION_GRANTED){
