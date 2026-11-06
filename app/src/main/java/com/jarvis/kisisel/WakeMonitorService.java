@@ -297,6 +297,8 @@ public final class WakeMonitorService extends Service {
                 "(?iu)^(?:ekibe|ekip|ekibime|müdür|müdüre)\\s+","").trim();
             return startVoiceTeam(goal);
         }
+        if(com.jarvis.kisisel.core.CaptainPlanner.shouldDelegate(prompt))
+            return startVoiceTeam(prompt);
         boolean explicitHermes="HYBRID".equals(
             getSharedPreferences("jarvis_settings",MODE_PRIVATE)
                 .getString("pandora_mode","HERMES")) &&
