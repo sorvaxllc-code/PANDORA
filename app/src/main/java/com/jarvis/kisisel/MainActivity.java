@@ -137,6 +137,8 @@ public class MainActivity extends Activity {
         if(!prefs.contains("pandora_mode")) modelRouter.setMode("HERMES");
         buildUi();
         enableHeadsetAudioGuard();
+        getWindow().getDecorView().post(this::prepareAutoWake);
+
         List<String[]> history = memory.messages();
         if(history.isEmpty()) addBubble(false, "Merhaba! Ben PANDORA. Sesli konuşmak için mikrofonu kullanabilir veya aşağıdaki komutlardan başlayabilirsin. Komutlar ücretsiz ve yerel çalışır.", false);
         else for (String[] m : history) addBubble("user".equals(m[0]), m[1], false);
@@ -1001,6 +1003,17 @@ public class MainActivity extends Activity {
     @Override protected void onResume(){
         super.onResume();
         if(speech!=null&&!PandoraAlerts.headsetConnected(this))speech.stop();
+        voiceHandler.removeCallbacks(voiceTicker);
+        voiceHandler.postDelayed(voiceTicker,300);
+        if(prefs!=null && prefs.getBoolean("pandora_auto_wake",true) &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED &&
+            !WakeMonitorService.running) {
+            getWindow().getDecorView().post(this::startWakeMonitor);
+        }
+    }
+    @Override protected void onPause(){
+        voiceHandler.removeCallbacks(voiceTicker);
+        super.onPause();
     }
     private void editHermesKey(){
         EditText key=new EditText(this);
@@ -1412,32 +1425,50 @@ public class MainActivity extends Activity {
             }).show();
     }
 
-    private void toggleWakeMonitor() {
-        if(!WakeMonitorService.running && !PandoraAlerts.headsetConnected(this)){
-            Toast.makeText(this,"Hey Pandora yalnızca kulaklık bağlıyken çalışabilir.",Toast.LENGTH_LONG).show();return;
-        }
-        if(WakeMonitorService.running) {
-            stopService(new Intent(this,WakeMonitorService.class));
-            Toast.makeText(this,"Dinleme durduruldu",Toast.LENGTH_SHORT).show();
+    /** One-time Android permission request after launch; user can disable from Tools. */
+    private void prepareAutoWake(){
+        if(!prefs.getBoolean("pandora_auto_wake",true)){refreshVoiceIndicator();return;}
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                !=PackageManager.PERMISSION_GRANTED){
+            if(!prefs.getBoolean("pandora_mic_asked",false)){
+                prefs.edit().putBoolean("pandora_mic_asked",true).apply();
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},
+                    WAKE_AUDIO_REQUEST);
+            }
+            refreshVoiceIndicator();
             return;
         }
-        new AlertDialog.Builder(this).setTitle("Hey Pandora · Deneysel")
-            .setMessage("Bu özellik mikrofonu yalnızca onayından sonra kullanır. Android bildirimi görünür ve oradan kapatılabilir. Sistem ses tanıması internet kullanabilir. Arka planda ve WhatsApp görüşmesinde sürekli algılama garanti edilmez. Saat, tarih ve şarj sorularını algılar; ekran analizi ve WhatsApp düğme denemesi için ayrıca Android Erişilebilirlik izni gerekir. Başlatılsın mı?")
-            .setNegativeButton("Vazgeç",null)
-            .setPositiveButton("Başlat",(d,w)->{
-                if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
-                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_AUDIO_REQUEST);
-                else startWakeMonitor();
-            }).show();
+        if(!WakeMonitorService.running)startWakeMonitor();
+        refreshVoiceIndicator();
     }
-    private void startWakeMonitor() {
-        try {
-            startForegroundService(new Intent(this,WakeMonitorService.class).setAction(WakeMonitorService.ACTION_START));
-            Toast.makeText(this,"Deneysel dinleme açılıyor",Toast.LENGTH_LONG).show();
-        } catch(RuntimeException e) {
-            new AlertDialog.Builder(this).setTitle("Dinleme açılamadı")
-              .setMessage("Android mikrofon hizmetini başlatmayı engelledi. PANDORA ekrandayken tekrar deneyebilirsin.")
-              .setPositiveButton("Tamam",null).show();
+    /** Disables auto-wake persistently, or re-enables it without an extra popup. */
+    private void toggleWakeMonitor(){
+        boolean enabled=prefs.getBoolean("pandora_auto_wake",true);
+        if(enabled && WakeMonitorService.running){
+            prefs.edit().putBoolean("pandora_auto_wake",false).apply();
+            stopService(new Intent(this,WakeMonitorService.class));
+            Toast.makeText(this,"Otomatik dinleme kapatıldı",Toast.LENGTH_SHORT).show();
+        }else{
+            prefs.edit().putBoolean("pandora_auto_wake",true).apply();
+            if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                    !=PackageManager.PERMISSION_GRANTED){
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},
+                    WAKE_AUDIO_REQUEST);
+            }else{
+                startWakeMonitor();
+            }
+        }
+        refreshVoiceIndicator();
+    }
+    private void startWakeMonitor(){
+        if(WakeMonitorService.running)return;
+        try{
+            startForegroundService(new Intent(this,WakeMonitorService.class)
+                .setAction(WakeMonitorService.ACTION_START));
+        }catch(RuntimeException e){
+            Toast.makeText(this,
+                "Android arka planda mikrofon hizmetini engelledi. Uygulamayı açıkken yeniden dene.",
+                Toast.LENGTH_LONG).show();
         }
     }
     private void testImportantAlert() {
@@ -1459,8 +1490,15 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults) {
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
         if(requestCode==WAKE_AUDIO_REQUEST) {
-            if(grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED)startWakeMonitor();
-            else Toast.makeText(this,"Mikrofon izni verilmedi.",Toast.LENGTH_LONG).show();
+            if(grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED) {
+                prefs.edit().putBoolean("pandora_auto_wake",true).apply();
+                startWakeMonitor();
+            } else {
+                prefs.edit().putBoolean("pandora_auto_wake",false).apply();
+                Toast.makeText(this,"Mikrofon izni verilmedi. Yazışma çalışmaya devam eder.",
+                    Toast.LENGTH_LONG).show();
+            }
+            refreshVoiceIndicator();
         } else if(requestCode==NOTIF_REQUEST &&
                 (grantResults.length==0 || grantResults[0]!=PackageManager.PERMISSION_GRANTED)) {
             Toast.makeText(this,"Bildirim izni olmadan ekran analizi sonuçlarını göremeyebilirsin.",
@@ -1496,6 +1534,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         cancelModelRequest(false);
         audioGuard.removeCallbacks(guardAudio);
+        voiceHandler.removeCallbacksAndMessages(null);
         if(speech!=null){speech.stop();speech.shutdown();}
         if(memory!=null)memory.close();
         super.onDestroy();
