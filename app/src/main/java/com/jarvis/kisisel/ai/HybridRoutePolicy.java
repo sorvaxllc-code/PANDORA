@@ -16,11 +16,10 @@ public final class HybridRoutePolicy {
     public static boolean isExplicitHermesRequest(String text){
         if(text==null)return false;
         String q=text.trim().toLowerCase(java.util.Locale.ROOT);
-        return q.startsWith("hermes,")||q.startsWith("hermes:")
-            ||q.startsWith("hermes ")||q.equals("hermes");
+        return q.startsWith("hermes,")||q.startsWith("hermes:");
     }
     public static String stripHermesPrefix(String text){
         if(!isExplicitHermesRequest(text))return text;
-        return text.trim().replaceFirst("(?iu)^hermes[,:]?\\\\s*","").trim();
+        return text.trim().replaceFirst("(?iu)^hermes[,:]?\\s*","").trim();
     }
 }
