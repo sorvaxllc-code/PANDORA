@@ -49,7 +49,7 @@ public final class PandoraAlerts {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return false;
         Notification message = new Notification.Builder(context, ALERT_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.pandora_status_icon)
                 .setContentTitle(title).setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
                 .setAutoCancel(true).setContentIntent(openApp(context))
@@ -71,8 +71,8 @@ public final class PandoraAlerts {
         PendingIntent videoIntent = PendingIntent.getService(context, 146, video,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(context, MONITOR_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("PANDORA · Hey Pandora hazır")
+                .setSmallIcon(R.drawable.pandora_status_icon)
+                .setContentTitle("PANDORA · Pandora sesli asistan")
                 .setContentText("Yalnızca kulaklıkla dinleme · Durdurmak için dokun")
                 .setContentIntent(openApp(context))
                 .addAction(android.R.drawable.ic_menu_view, "Ekrana bak", screenIntent)
