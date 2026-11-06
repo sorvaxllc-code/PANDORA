@@ -1772,8 +1772,7 @@ public class MainActivity extends Activity {
             "9 · İzinler ve bağlantılar raporu"
         };
         new AlertDialog.Builder(this)
-            .setTitle("PANDORA · Kurulum Merkezi")
-            .setMessage("İzinleri sen bir kez verirsin; PANDORA bunları kendiliğinden açamaz. Erişilebilirlik, korumalı ekranlar ve arama ayrı Android onaylarına tabidir. Her izni gerekirse sonradan kapatabilirsin.")
+            .setTitle("PANDORA · Kurulum Merkezi · İzinleri seç")
             .setItems(tasks,(d,which)->{
                 switch(which){
                     case 0:requestWakePermissions(false);break;
