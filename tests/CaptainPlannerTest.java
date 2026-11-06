@@ -3,6 +3,10 @@ public class CaptainPlannerTest {
  static void ok(boolean x){if(!x)throw new AssertionError("CaptainPlanner test failed");}
  public static void main(String[] a){
    ok(CaptainPlanner.forGoal("Shopify ürün satışı").lead.equals("E-Ticaret"));
+   ok(CaptainPlanner.shouldDelegate("Shopify ürünüm için fiyat ve satış planı hazırla"));
+   ok(CaptainPlanner.shouldDelegate("Kripto grafiklerini analiz et ve strateji hazırla"));
+   ok(!CaptainPlanner.shouldDelegate("Selam, nasılsın?"));
+   ok(!CaptainPlanner.shouldDelegate("Saat kaç?"));
    ok(CaptainPlanner.forGoal("Android uygulama hata").lead.equals("Yazılım"));
    ok(CaptainPlanner.forGoal("BTC USDT 5 dk grafik RSI").lead.equals("Grafik & Kripto"));
    ok(CaptainPlanner.forGoal("Telegram X son dakika haber").lead.equals("Haber & Kaynak"));
