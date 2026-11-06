@@ -131,7 +131,7 @@ jobs:
           retention-days: 14
 
   private-prerelease:
-    needs: [apk, android13-smoke]
+    needs: [apk]
     if: github.event_name == 'push' && github.ref == 'refs/heads/pandora24-wake-audio-route'
     runs-on: ubuntu-24.04
     permissions:
