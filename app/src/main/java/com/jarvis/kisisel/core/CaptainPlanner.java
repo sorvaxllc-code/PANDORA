@@ -45,6 +45,19 @@ public final class CaptainPlanner {
             return new Plan(goal,"Operasyon","Strateji");
         return new Plan(goal,"Strateji","Araştırma");
     }
+    /** Route substantive multi-step work to the manager, keep everyday Q&A fast. */
+    public static boolean shouldDelegate(String request){
+        if(request==null)return false;
+        String q=request.toLowerCase(new Locale("tr","TR")).trim();
+        boolean domain=containsAny(q,"e-ticaret","shopify","ürün","marka","seo","mağaza",
+            "yazılım","uygulama","web sitesi","site kur","borsa","kripto","grafik",
+            "finans","fiyat","maliyet","tasarım","görsel","proje","reklam",
+            "sosyal medya","telegram","twitter","araştırma","iş planı");
+        boolean action=containsAny(q,"hazırla","oluştur","analiz","araştır","geliştir",
+            "tasarla","karşılaştır","planla","raporla","incele","strateji kur",
+            "fikir üret","plan yap","hesapla","değerlendir","çalışma yap");
+        return q.length()>18 && domain && action;
+    }
     private static boolean containsAny(String s,String... terms){
         for(String term:terms)if(s.contains(term))return true;
         return false;
