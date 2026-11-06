@@ -15,9 +15,9 @@ public final class ModelRouter {
    prefs=app.getSharedPreferences("jarvis_settings",0);
  }
  public String mode(){return prefs.getString("pandora_mode","OFF");}
- public void setMode(String mode){if(mode.equals("OFF")||mode.equals("LOCAL")||mode.equals("CLOUD")||mode.equals("AUTO"))prefs.edit().putString("pandora_mode",mode).apply();}
+ public void setMode(String mode){if(mode.equals("OFF")||mode.equals("LOCAL")||mode.equals("CLOUD")||mode.equals("AUTO")||mode.equals("HERMES"))prefs.edit().putString("pandora_mode",mode).apply();}
  public String modeLabel(){switch(mode()){
-   case "LOCAL":return "YEREL";case "CLOUD":return "BULUT";case "AUTO":return "OTOMATİK";default:return "KOMUT";}}
+   case "HERMES":return "HERMES";case "LOCAL":return "YEREL";case "CLOUD":return "BULUT";case "AUTO":return "OTOMATİK";default:return "KOMUT";}}
  public boolean allowCloudMemory(){return prefs.getBoolean("cloud_history_optin",false);}
  public void setAllowCloudMemory(boolean value){prefs.edit().putBoolean("cloud_history_optin",value).apply();}
  private JSONArray messages(String prompt,boolean cloud,boolean allowActions,boolean includeMemory) throws Exception {
@@ -57,6 +57,16 @@ public final class ModelRouter {
    new Thread(()->{
      String text=null,source="";String errors="";
      String mode=mode();String key=SecretVault.get(app);
+     if(!cancellation.isCancelled() && mode.equals("HERMES")){
+       String hermesKey=HermesVault.get(app);
+       if(hermesKey.isEmpty()) errors="Hermes API anahtarını Ayarlar'dan ekle.";
+       else try{
+         HttpAiProvider gateway=new HttpAiProvider("Hermes Agent (yerel Gateway)",
+           "http://127.0.0.1:8642/v1/chat/completions","hermes-agent",hermesKey,120000);
+         text=gateway.answer(messages(prompt,true,false,includeMemory),cancellation);
+         source=gateway.id();
+       }catch(Exception e){errors="Hermes: "+e.getMessage();}
+     }
      if(!cancellation.isCancelled() && (mode.equals("CLOUD")||mode.equals("AUTO")) && !key.isEmpty()){
        try {
          AiProvider cloud=new HttpAiProvider("OpenRouter ücretsiz",FreeCloudPolicy.COMPLETIONS_URL,FreeCloudPolicy.MODEL,key,FreeCloudPolicy.CLOUD_READ_TIMEOUT_MS);
@@ -71,7 +81,8 @@ public final class ModelRouter {
      }
      if(cancellation.isCancelled())return;
      if(text==null){
-       if(mode.equals("LOCAL")){
+       if(mode.equals("HERMES")){text="Hermes yanıt veremedi. "+errors+" Gateway Termux içinde açık mı ve API anahtarı kayıtlı mı kontrol et.";}
+       else if(mode.equals("LOCAL")){
          text="Yerel model belirlenen sürede yanıt üretemedi. 8B model bu telefonda çok yavaş çalışıyor. "
              +"Durdur düğmesini kullanabilir veya Yapay zekâ > Bulut/Otomatik moduna geçebilirsin. "
              +"Not alma ve saat gibi temel görevler bulut gerektirmez.";
