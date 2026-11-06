@@ -92,6 +92,8 @@ public final class OfflineVoice implements AutoCloseable {
                     Thread.sleep(125);
                     continue;
                 }
+                if(capturing && audio.getRecordingState()!=AudioRecord.RECORDSTATE_RECORDING)
+                    capturing=false;
                 if(!capturing){
                     audio.startRecording();
                     capturing=true;
@@ -105,7 +107,7 @@ public final class OfflineVoice implements AutoCloseable {
                 }
                 int count=audio.read(samples,0,samples.length);
                 if(count<=0){
-                    if(closed||!mayCapture())continue;
+                    if(closed||!mayCapture()||audio.getRecordingState()!=AudioRecord.RECORDSTATE_RECORDING){capturing=false;continue;}
                     throw new IllegalStateException("Mikrofon okuma hatası: "+count);
                 }
                 if(!mayCapture())continue;
