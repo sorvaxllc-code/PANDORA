@@ -73,6 +73,7 @@ public final class WakeMonitorService extends Service {
     private final WakeConversationState conversation = new WakeConversationState();
     private boolean processingAction = false;
     private HttpAiProvider.CancelToken pendingModel;
+    private com.jarvis.kisisel.core.CaptainTeam voiceTeam;
     private MemoryDb pendingDatabase;
     private int modelGeneration = 0;
     private final Runnable retry = this::listenOnce;
@@ -272,6 +273,13 @@ public final class WakeMonitorService extends Service {
     private boolean answerGeneralQuestion(String phrase) {
         String prompt=phrase.trim().replaceFirst("(?iu)^(?:hey\\s+)?pandora[\\s,.:;!?]*","").trim();
         if(prompt.isEmpty())return finishScreenAction("PANDORA","Dinliyorum, ne yapmak istiyorsun?");
+        // Hands-free manager dispatch needs no touch or screen visibility.
+        if(prompt.toLowerCase(new Locale("tr","TR")).matches(
+                "^(?:ekibe|ekip|ekibime|müdür|müdüre)\\s+.{4,}$")) {
+            String goal=prompt.replaceFirst(
+                "(?iu)^(?:ekibe|ekip|ekibime|müdür|müdüre)\\s+","").trim();
+            return startVoiceTeam(goal);
+        }
         boolean explicitHermes="HYBRID".equals(
             getSharedPreferences("jarvis_settings",MODE_PRIVATE)
                 .getString("pandora_mode","HERMES")) &&
@@ -282,6 +290,35 @@ public final class WakeMonitorService extends Service {
             +"Telefonu veya diğer uygulamaları kendi başına kontrol etme. Eylem JSON'u üretme. "
             +"Yetkisiz bir işi yaptığını iddia etme. Kullanıcının sorusu: "+plain;
         return startModelQuery(question,"PANDORA · Yanıt",explicitHermes);
+    }
+
+    private boolean startVoiceTeam(String goal){
+        if(stopped||processingAction)return false;
+        processingAction=true;
+        if(offline!=null)offline.pause();
+        if(voiceTeam==null)voiceTeam=new com.jarvis.kisisel.core.CaptainTeam(this);
+        if(voiceTeam.busy()){
+            return finishScreenAction("PANDORA · Müdür",
+                "Müdür hâlâ önceki görevi yürütüyor.");
+        }
+        PandoraAlerts.postImportant(this,"PANDORA · Uzmanlar çalışıyor",
+            "Müdür işi uzmanlara ayırdı. Tamamlanınca sesli bildireceğim.");
+        voiceTeam.start(goal,new com.jarvis.kisisel.core.CaptainTeam.Listener(){
+            @Override public void progress(String label,String detail,int step){
+                // Progress stays silent and is never presented as completed.
+            }
+            @Override public void complete(String task,String report){
+                if(stopped)return;
+                finishScreenAction("PANDORA · Müdür raporu",
+                    "Müdür ve iki uzman yanıtlarını tamamladı. "+report);
+            }
+            @Override public void failed(String reason){
+                if(stopped)return;
+                finishScreenAction("PANDORA · Ekip görevi başarısız",
+                    "Ekip çalışması tamamlanamadı. "+reason);
+            }
+        });
+        return true;
     }
 
     private void runNotificationAction(String action) {
@@ -348,7 +385,8 @@ public final class WakeMonitorService extends Service {
         handler.postDelayed(()->{
             if(stopped || generation!=modelGeneration || !processingAction)return;
             ++modelGeneration;
-            if(pendingModel!=null)pendingModel.cancel();
+            if(voiceTeam!=null){voiceTeam.close();voiceTeam=null;}
+        if(pendingModel!=null)pendingModel.cancel();
             pendingModel=null;
             closePendingDatabase();
             finishScreenAction(title,"Yapay zekâ zamanında yanıt vermedi; işlem durduruldu.");
