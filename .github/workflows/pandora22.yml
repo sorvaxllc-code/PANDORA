@@ -1,7 +1,7 @@
-name: PANDORA 22 — Neon Voice Android
+name: PANDORA 23 — Offline Silent Wake Android
 on:
   push:
-    branches: [pandora22-silent-wake-neon]
+    branches: [pandora23-quiet-offline-wake]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -25,11 +25,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.6.1'
+      - name: Fetch and SHA256-verify Vosk models
+        run: python3 scripts/prepare_voice_model.py
+      - name: Offline parser tests
+        run: bash tests/RUN_TESTS.sh
       - name: Build and check APK
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: PANDORA-22-APK
+          name: PANDORA-23-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
           if-no-files-found: error
