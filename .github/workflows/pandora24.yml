@@ -27,6 +27,10 @@ jobs:
         run: python3 scripts/prepare_voice_model.py
       - name: Pure-Java voice/policy regression tests
         run: bash tests/RUN_TESTS.sh
+      - name: Acoustic wake diagnostic (noise and TTS)
+        run: |
+          python3 -m pip install --user vosk==0.3.45
+          python3 scripts/test_vosk_synth.py
       - name: Assemble installable Android APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Validate the Android APK
