@@ -204,7 +204,10 @@ public final class WakeMonitorService extends Service {
             }
         });
         if(!headsetPaused)offline.resume();
-        return START_NOT_STICKY;
+        // Android 13 and earlier may restart an explicitly enabled foreground
+        // wake service after memory pressure. Android 14+ enforces additional
+        // microphone while-in-use startup restrictions; do not auto-restart there.
+        return Build.VERSION.SDK_INT<=33 ? START_STICKY : START_NOT_STICKY;
     }
     private void listenOnce(){
         if(stopped||headsetPaused||speaking||processingAction)return;
