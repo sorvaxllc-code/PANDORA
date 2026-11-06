@@ -8,8 +8,8 @@ android {
         applicationId 'com.jarvis.kisisel'
         minSdk 26
         targetSdk 35
-        versionCode 21
-        versionName '2.1.0-neon'
+        versionCode 22
+        versionName '2.2.0-neon-voice'
         manifestPlaceholders = [pandoraAppName: 'PANDORA']
     }
 
@@ -33,8 +33,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix '.trial21'
-            manifestPlaceholders = [pandoraAppName: 'PANDORA 21']
+            applicationIdSuffix '.trial22'
+            manifestPlaceholders = [pandoraAppName: 'PANDORA 22']
         }
         release {
             // Separate, stable ID; old differently signed apps remain untouched.
