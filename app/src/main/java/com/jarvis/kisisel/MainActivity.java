@@ -1606,7 +1606,7 @@ public class MainActivity extends Activity {
             manager.requestAddTileService(
                 new ComponentName(this,PandoraQuickTileService.class),
                 "PANDORA · Ekrana Bak",
-                Icon.createWithResource(this,R.mipmap.ic_launcher),
+                Icon.createWithResource(this,R.drawable.pandora_status_icon),
                 getMainExecutor(),
                 result -> {
                     if(result==StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ||
