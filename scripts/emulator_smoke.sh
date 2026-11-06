@@ -29,4 +29,5 @@ if adb logcat -d -v brief -s AndroidRuntime:E | grep -q "FATAL EXCEPTION"; then
   adb logcat -d -v brief -s AndroidRuntime:E | tail -120
   exit 1
 fi
+adb exec-out screencap -p > "$GITHUB_WORKSPACE/pandora24-android13.png" || true
 echo "Android 13 launch, UI and no-headset idle smoke test: OK"
