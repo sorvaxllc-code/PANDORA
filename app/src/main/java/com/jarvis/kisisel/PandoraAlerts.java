@@ -13,7 +13,7 @@ import android.os.Build;
 
 public final class PandoraAlerts {
     public static final String ALERT_CHANNEL = "pandora_important_silent_v20";
-    public static final String MONITOR_CHANNEL = "pandora_wake_monitor_v1";
+    public static final String MONITOR_CHANNEL = "pandora_wake_monitor_silent_v22";
     private PandoraAlerts() {}
 
     public static void ensureChannels(Context context) {
@@ -26,8 +26,11 @@ public final class PandoraAlerts {
         urgent.enableVibration(false);
         manager.createNotificationChannel(urgent);
         NotificationChannel monitor = new NotificationChannel(MONITOR_CHANNEL,
-                "PANDORA sesli uyandırma", NotificationManager.IMPORTANCE_LOW);
-        monitor.setDescription("Deneysel mikrofon dinleme hizmeti çalışırken görünür.");
+                "PANDORA sessiz sesli uyandırma", NotificationManager.IMPORTANCE_LOW);
+        monitor.setDescription("Kulaklık yokken mikrofon kapalıdır. Android zorunlu durum bildirimi.");
+        monitor.setSound(null,null);
+        monitor.enableVibration(false);
+        monitor.setShowBadge(false);
         manager.createNotificationChannel(monitor);
     }
     public static boolean canNotify(Context context) {
@@ -69,13 +72,13 @@ public final class PandoraAlerts {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(context, MONITOR_CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("PANDORA · Deneysel sesli uyandırma")
-                .setContentText("Mikrofon kullanılıyor · Durdurmak için dokun")
+                .setContentTitle("PANDORA · Hey Pandora hazır")
+                .setContentText("Yalnızca kulaklıkla dinleme · Durdurmak için dokun")
                 .setContentIntent(openApp(context))
                 .addAction(android.R.drawable.ic_menu_view, "Ekrana bak", screenIntent)
                 .addAction(android.R.drawable.ic_menu_camera, "Görüntülüye geç", videoIntent)
                 .addAction(android.R.drawable.ic_media_pause, "Durdur", stopIntent)
-                .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
+                .setOngoing(true).setSilent(true).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).build();
     }
     public static boolean headsetConnected(Context context) {
