@@ -272,9 +272,16 @@ public final class WakeMonitorService extends Service {
     private boolean answerGeneralQuestion(String phrase) {
         String prompt=phrase.trim().replaceFirst("(?iu)^(?:hey\\s+)?pandora[\\s,.:;!?]*","").trim();
         if(prompt.isEmpty())return finishScreenAction("PANDORA","Dinliyorum, ne yapmak istiyorsun?");
-        return startModelQuery("Kullanıcı sana kulaklıktan sesleniyor. Türkçe ve kısa cevap ver. "
+        boolean explicitHermes="HYBRID".equals(
+            getSharedPreferences("jarvis_settings",MODE_PRIVATE)
+                .getString("pandora_mode","HERMES")) &&
+            com.jarvis.kisisel.ai.HybridRoutePolicy.isExplicitHermesRequest(prompt);
+        String plain=explicitHermes
+            ? com.jarvis.kisisel.ai.HybridRoutePolicy.stripHermesPrefix(prompt):prompt;
+        String question="Kullanıcı sana kulaklıktan sesleniyor. Türkçe ve kısa cevap ver. "
             +"Telefonu veya diğer uygulamaları kendi başına kontrol etme. Eylem JSON'u üretme. "
-            +"Yetkisiz bir işi yaptığını iddia etme. Kullanıcının sorusu: "+prompt,"PANDORA · Yanıt");
+            +"Yetkisiz bir işi yaptığını iddia etme. Kullanıcının sorusu: "+plain;
+        return startModelQuery(question,"PANDORA · Yanıt",explicitHermes);
     }
 
     private void runNotificationAction(String action) {
@@ -309,6 +316,9 @@ public final class WakeMonitorService extends Service {
     }
 
     private boolean startModelQuery(String prompt,String title) {
+        return startModelQuery(prompt,title,false);
+    }
+    private boolean startModelQuery(String prompt,String title,boolean forceHermes) {
         if(stopped || (pendingModel!=null))return false;
         pendingDatabase=new MemoryDb(this);
         ModelRouter router=new ModelRouter(this,pendingDatabase);
@@ -321,12 +331,15 @@ public final class WakeMonitorService extends Service {
         // Preparing a reply is silent: Android keeps only the microphone FGS indicator.
         final int generation=++modelGeneration;
         try {
-            pendingModel=router.askInformationalAsync(prompt,(answer,source)->handler.post(()->{
+            ModelRouter.Callback callback=(answer,source)->handler.post(()->{
                 if(stopped || generation!=modelGeneration)return;
                 pendingModel=null;
                 closePendingDatabase();
                 finishScreenAction(title,answer==null?"Yanıt alınamadı.":answer);
-            }));
+            });
+            pendingModel=forceHermes
+                ? router.askHermesInformationalAsync(prompt,callback)
+                : router.askInformationalAsync(prompt,callback);
         } catch(RuntimeException e) {
             pendingModel=null;
             closePendingDatabase();
