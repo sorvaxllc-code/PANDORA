@@ -2,8 +2,6 @@ name: PANDORA 20 Hermes Full Android
 on:
   push:
     branches: [pandora20-unified-final]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 jobs:
   apk:
