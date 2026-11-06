@@ -58,3 +58,15 @@ javac -encoding UTF-8 -d /tmp/pandora-parser-test \
   app/src/main/java/com/jarvis/kisisel/ScreenCapturePolicy.java \
   tests/ScreenCapturePolicyTest.java
 java -cp /tmp/pandora-parser-test ScreenCapturePolicyTest
+
+# Wake phrase requires complete speech, plausible duration and confidence.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakePhraseGate.java tests/WakePhraseGateTest.java
+java -cp /tmp/pandora-parser-test WakePhraseGateTest
+
+# Explicit user-requested Hermes task routing must not misclassify ordinary questions.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/ai/HybridRoutePolicy.java tests/HybridRoutePolicyTest.java
+java -cp /tmp/pandora-parser-test HybridRoutePolicyTest
+
+# Manager role selection and safe synthesis prompts.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/core/CaptainPlanner.java tests/CaptainPlannerTest.java
+java -cp /tmp/pandora-parser-test CaptainPlannerTest

@@ -5,7 +5,7 @@ import com.jarvis.kisisel.MemoryDb;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.List;
-/** Modes OFF/LOCAL/CLOUD/AUTO. AUTO uses ONLY free OpenRouter, then local. */
+/** PANDORA modes. HYBRID: direct Groq for chat, Hermes for explicit task requests. */
 public final class ModelRouter {
  private final Context app; private final MemoryDb memory;
  private final SharedPreferences prefs;
@@ -15,9 +15,9 @@ public final class ModelRouter {
    prefs=app.getSharedPreferences("jarvis_settings",0);
  }
  public String mode(){return prefs.getString("pandora_mode","OFF");}
- public void setMode(String mode){if(mode.equals("OFF")||mode.equals("LOCAL")||mode.equals("CLOUD")||mode.equals("AUTO"))prefs.edit().putString("pandora_mode",mode).apply();}
+ public void setMode(String mode){if(mode.equals("OFF")||mode.equals("LOCAL")||mode.equals("CLOUD")||mode.equals("AUTO")||mode.equals("HERMES")||mode.equals("GROQ")||mode.equals("HYBRID"))prefs.edit().putString("pandora_mode",mode).apply();}
  public String modeLabel(){switch(mode()){
-   case "LOCAL":return "YEREL";case "CLOUD":return "BULUT";case "AUTO":return "OTOMATİK";default:return "KOMUT";}}
+   case "HERMES":return "HERMES";case "HYBRID":return "GROQ + HERMES";case "GROQ":return "GROQ HIZLI";case "LOCAL":return "YEREL";case "CLOUD":return "BULUT";case "AUTO":return "OTOMATİK";default:return "KOMUT";}}
  public boolean allowCloudMemory(){return prefs.getBoolean("cloud_history_optin",false);}
  public void setAllowCloudMemory(boolean value){prefs.edit().putBoolean("cloud_history_optin",value).apply();}
  private JSONArray messages(String prompt,boolean cloud,boolean allowActions,boolean includeMemory) throws Exception {
@@ -41,22 +41,65 @@ public final class ModelRouter {
    return a;
  }
  public HttpAiProvider.CancelToken askAsync(String prompt,Callback callback){
-   return askInternal(prompt,callback,true,true);
+   return askInternal(prompt,callback,true,true,false);
  }
  /** Read-only reasoning path; returned model content never becomes a device action. */
  public HttpAiProvider.CancelToken askInformationalAsync(String prompt,Callback callback) {
-   return askInternal(prompt,callback,false,true);
+   return askInternal(prompt,callback,false,true,false);
  }
  /** Never include unrelated notes/chat in a screen review. */
  public HttpAiProvider.CancelToken askScreenAsync(String prompt,Callback callback) {
-   return askInternal(prompt,callback,false,false);
+   return askInternal(prompt,callback,false,false,false);
+ }
+ /** Specialist task: one read-only model call without personal notes or history. */
+ public HttpAiProvider.CancelToken askTeamAsync(String prompt,Callback callback){
+   return askInternal(prompt,callback,false,false,false);
+ }
+ /** Runs an explicit, user-requested task via Hermes even in HYBRID mode. */
+ public HttpAiProvider.CancelToken askHermesAsync(String prompt,Callback callback){
+   return askInternal(prompt,callback,false,true,true);
+ }
+ /** Read-only Hermes task route for spoken explicit "Hermes:" commands. */
+ public HttpAiProvider.CancelToken askHermesInformationalAsync(String prompt,Callback callback){
+   return askInternal(prompt,callback,false,true,true);
  }
  private HttpAiProvider.CancelToken askInternal(String prompt,Callback callback,
-                                                boolean allowActions,boolean includeMemory) {
+                                                boolean allowActions,boolean includeMemory,
+                                                boolean forceHermes) {
    final HttpAiProvider.CancelToken cancellation=new HttpAiProvider.CancelToken();
    new Thread(()->{
      String text=null,source="";String errors="";
-     String mode=mode();String key=SecretVault.get(app);
+     String mode=forceHermes?"HERMES":mode();
+     String key=SecretVault.get(app);
+     boolean consent=prefs.getBoolean("pandora_groq_notice_v25",false);
+     boolean groqReady=consent && GroqVault.exists(app);
+     String plan=HybridRoutePolicy.provider(mode,groqReady,HermesVault.exists(app));
+     if(!cancellation.isCancelled() && (mode.equals("HYBRID")||mode.equals("GROQ"))) {
+       if("GROQ".equals(plan)){
+         try{
+           HttpAiProvider fast=new HttpAiProvider("Groq • GPT-OSS 20B (hızlı)",
+             "https://api.groq.com/openai/v1/chat/completions",
+             "openai/gpt-oss-20b",GroqVault.get(app),22000);
+           text=fast.answer(messages(prompt,true,false,includeMemory),cancellation);
+           source=fast.id();
+         }catch(Exception e){errors="Groq: "+e.getMessage();}
+       }else if("NEED_GROQ".equals(plan)){
+         errors="Groq anahtarı veya bulut izni eksik. Araçlar > Groq hızlı sohbet bölümünü aç.";
+       }
+     }
+     // Without a Groq key HYBRID continues to use the already working Hermes.
+     // A Groq timeout or rate limit does NOT silently trigger a slow/paid fallback.
+     if(!cancellation.isCancelled() && (mode.equals("HERMES")
+         || (mode.equals("HYBRID") && "HERMES".equals(plan)))){
+       String hermesKey=HermesVault.get(app);
+       if(hermesKey.isEmpty()) errors="Hermes API anahtarını Ayarlar'dan ekle.";
+       else try{
+         HttpAiProvider gateway=new HttpAiProvider("Hermes Agent (yerel Gateway)",
+           "http://127.0.0.1:8642/v1/chat/completions","hermes-agent",hermesKey,120000);
+         text=gateway.answer(messages(prompt,true,false,includeMemory),cancellation);
+         source=gateway.id();
+       }catch(Exception e){errors="Hermes: "+e.getMessage();}
+     }
      if(!cancellation.isCancelled() && (mode.equals("CLOUD")||mode.equals("AUTO")) && !key.isEmpty()){
        try {
          AiProvider cloud=new HttpAiProvider("OpenRouter ücretsiz",FreeCloudPolicy.COMPLETIONS_URL,FreeCloudPolicy.MODEL,key,FreeCloudPolicy.CLOUD_READ_TIMEOUT_MS);
@@ -71,7 +114,12 @@ public final class ModelRouter {
      }
      if(cancellation.isCancelled())return;
      if(text==null){
-       if(mode.equals("LOCAL")){
+       if(mode.equals("HERMES")){text="Hermes yanıt veremedi. "+errors+" Gateway Termux içinde açık mı ve API anahtarı kayıtlı mı kontrol et.";}
+       else if(mode.equals("GROQ")||mode.equals("HYBRID")){
+         text="Hızlı sohbet yanıt veremedi. "+errors
+           +(mode.equals("HYBRID")?" İstersen Hermes moduna geçebilirsin.":"");
+       }
+       else if(mode.equals("LOCAL")){
          text="Yerel model belirlenen sürede yanıt üretemedi. 8B model bu telefonda çok yavaş çalışıyor. "
              +"Durdur düğmesini kullanabilir veya Yapay zekâ > Bulut/Otomatik moduna geçebilirsin. "
              +"Not alma ve saat gibi temel görevler bulut gerektirmez.";
