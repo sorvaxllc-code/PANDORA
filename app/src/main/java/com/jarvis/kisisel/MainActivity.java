@@ -607,7 +607,10 @@ public class MainActivity extends Activity {
             org.json.JSONArray examples=new org.json.JSONArray();
             String[] titles={"E-Ticaret Projesi","Kripto Stratejisi",
                 "PANDORA Geliştirme","Yapay Zekâ Kitabı"};
-            for(String t:titles)examples.put(new JSONObject().put("name",t).put("progress",0));
+            for(String t:titles){
+                try{examples.put(new JSONObject().put("name",t).put("progress",0));}
+                catch(org.json.JSONException ignored){}
+            }
             prefs.edit().putString("pandora_projects_v22",examples.toString()).apply();
             return examples;
         }
