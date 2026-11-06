@@ -532,6 +532,9 @@ public class MainActivity extends Activity {
         addToolsCard(toolBody,"Groq · Hızlı sohbet",
             "GPT-OSS 20B · doğrudan bağlantı, Hermes beklemesi yok",
             0xFFB783FF,()->editGroqKey());
+        addToolsCard(toolBody,"Groq hız testi",
+            "Bağlantıyı doğrula ve gerçek yanıt süresini ölç",
+            0xFF68D5F5,()->testGroqConnection());
         addToolsCard(toolBody,"Groq + Hermes · Hibrit mod",
             "Sohbet Groq, açıkça istenen ajan görevi Hermes",
             0xFF45BEFF,()->{
@@ -1133,6 +1136,46 @@ public class MainActivity extends Activity {
         voiceHandler.removeCallbacks(voiceTicker);
         super.onPause();
     }
+    private void testGroqConnection(){
+        if(!GroqVault.exists(this)||
+           !prefs.getBoolean("pandora_groq_notice_v25",false)){
+            editGroqKey();return;
+        }
+        showStatus("GROQ · BAĞLANTI TESTİ");
+        new Thread(()->{
+            long begin=android.os.SystemClock.elapsedRealtime();
+            boolean success=false;String answer="";
+            try {
+                JSONArray input=new JSONArray()
+                    .put(new JSONObject().put("role","system")
+                        .put("content","Türkçe, çok kısa ve yalnızca isteneni yanıtla."))
+                    .put(new JSONObject().put("role","user")
+                        .put("content","Tek kelime ile selam ver."));
+                HttpAiProvider model=new HttpAiProvider(
+                    "Groq • GPT-OSS 20B",
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    "openai/gpt-oss-20b",
+                    GroqVault.get(this),18000);
+                answer=model.answer(input,new HttpAiProvider.CancelToken());
+                success=true;
+            }catch(Exception ex){answer=ex.getMessage();}
+            final boolean ok=success;
+            final String result=answer;
+            final long ms=android.os.SystemClock.elapsedRealtime()-begin;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                showStatus("HAZIR · "+modelRouter.modeLabel());
+                new AlertDialog.Builder(this)
+                    .setTitle(ok?"Groq bağlantısı başarılı":"Groq bağlantısı başarısız")
+                    .setMessage((ok?"Model yanıtı: ":"Hata: ")+result
+                        +"\nYanıt süresi: "+(ms/1000.0)+" saniye"
+                        +"\n\nBu yalnızca tek bir API isteğinin ölçümüdür. "
+                        +"Bütün konuşmaların aynı hızda olacağı garanti değildir.")
+                    .setPositiveButton("Tamam",null).show();
+            });
+        },"pandora-groq-connection-test").start();
+    }
+
     private void editGroqKey(){
         EditText key=new EditText(this);
         key.setSingleLine(true);
@@ -1259,6 +1302,7 @@ public class MainActivity extends Activity {
             "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI"),
             "Hermes API anahtarı / bağlantısı",
             "Groq hızlı sohbet / API anahtarı",
+            "Groq bağlantı / hız testi",
             "Türkçe ses seç / erkek sesi varsa seç",
             "Ses tonu: "+prefs.getFloat("pandora_voice_pitch",0.85f)+" (kulaklıkla)"
         };
@@ -1285,6 +1329,7 @@ public class MainActivity extends Activity {
                 case 11:toggleScreenCloudConsent();break;
                 case 12:editHermesKey();break;
                 case 15:editGroqKey();break;
+                case 16:testGroqConnection();break;
                 case 13:chooseVoice();break;
                 case 14:
                     final String[] tones={"Daha tok (0.75)","Tok / doğal (0.85)","Normal (1.00)"};
