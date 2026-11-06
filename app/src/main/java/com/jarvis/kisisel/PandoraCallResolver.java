@@ -45,7 +45,10 @@ public final class PandoraCallResolver {
             ContactsContract.CommonDataKinds.Phone.NUMBER
         };
         String selection=ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME+" LIKE ?";
-        String[] args={"%"+query.trim()+"%"};
+        String name=query.trim().replaceFirst("(?iu)[’']y?[ıiuü]$","")
+            .replaceFirst("(?iu)yi$","")
+            .replaceFirst("(?iu)([mn])[ıiuü]$","$1");
+        String[] args={"%"+name+"%"};
         HashSet<String> unique=new HashSet<>();
         try(Cursor cursor=context.getContentResolver().query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
