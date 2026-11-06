@@ -13,7 +13,7 @@ public class CaptainPlannerTest {
    ok(CaptainPlanner.forGoal("Bana bir düşünce deneyini yorumla").lead.equals("Strateji"));
    String s=CaptainPlanner.captainInstructions(CaptainPlanner.forGoal("Android uygulama"),"Bir","İki");
    ok(s.contains("Bir")&&s.contains("İki")&&s.contains("onayı"));
-   ok(CaptainPlanner.specialistInstructions("Araştırma","Soru").contains("canlı"));
+   ok(CaptainPlanner.specialistInstructions("Araştırma","Soru").contains("çevrimiçi"));
    ok(CaptainPlanner.forGoal("A".repeat(3500)).goal.length()==1800);
    System.out.println("CaptainPlannerTest: OK");
  }
