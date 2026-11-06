@@ -102,7 +102,7 @@ public final class PandoraScreenAnalysisController {
             finish(app,ticket,"Uygulama ekranı analiz sırasında değişti; güvenlik için işlem iptal edildi.");
             return;
         }
-        if(text==null||text.trim().length()<60) {
+        if(text==null||text.trim().length()<16) {
             finish(app,ticket,"Ekranda okunabilir içerik bulunamadı veya Android bu ekranı koruyor.");
             return;
         }
