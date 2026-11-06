@@ -505,6 +505,9 @@ public class MainActivity extends Activity {
         addToolsCard(toolBody,"Ses & mikrofon kontrolü",
             "Algılayıcı durumu, son Hey Pandora ve Bluetooth mikrofonu",0xFF3DD6EA,
             ()->showVoiceDiagnostics());
+        addToolsCard(toolBody,"Eski PANDORA sürümleri",
+            "Aynı mikrofona bağlanabilecek eski uygulamaları kontrol et",
+            0xFFFFC174,()->showLegacyPandoras());
         addToolsCard(toolBody,"Ses & konuşma ayarları",
             "Türkçe ses, ton, hız ve sesli yanıt",0xFF4DB6FF,()->showSettings());
         addToolsCard(toolBody,"Hermes bağlantısı",
@@ -746,6 +749,54 @@ public class MainActivity extends Activity {
         if(voiceOrb!=null)voiceOrb.setActive(active);
     }
 
+    private java.util.ArrayList<String[]> legacyPandoras(){
+        final String[][] variants={
+            {"PANDORA 17","com.jarvis.kisisel.trial17"},
+            {"PANDORA 19","com.pandora.hermespreview19"},
+            {"PANDORA 20","com.jarvis.kisisel.trial20"},
+            {"PANDORA 21","com.jarvis.kisisel.trial21"},
+            {"PANDORA 22","com.jarvis.kisisel.trial22"},
+            {"PANDORA 23","com.jarvis.kisisel.trial23"}
+        };
+        java.util.ArrayList<String[]> found=new java.util.ArrayList<>();
+        for(String[] entry:variants){
+            try{
+                getPackageManager().getPackageInfo(entry[1],0);
+                found.add(entry);
+            }catch(android.content.pm.PackageManager.NameNotFoundException ignored){}
+        }
+        return found;
+    }
+    /**
+     * Android does not allow silently terminating other installed apps or
+     * uninstalling them. Send the user to that app's real Settings page.
+     */
+    private void showLegacyPandoras(){
+        java.util.ArrayList<String[]> found=legacyPandoras();
+        if(found.isEmpty()){
+            new AlertDialog.Builder(this)
+                .setTitle("PANDORA · Eski sürümler")
+                .setMessage("Cihazda bilinen eski PANDORA test paketleri bulunmadı.")
+                .setPositiveButton("Tamam",null).show();
+            return;
+        }
+        String[] labels=new String[found.size()];
+        for(int i=0;i<found.size();i++){
+            labels[i]=found.get(i)[0]+" · Uygulama ayarlarını aç";
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Mikrofon çakışmalarını gider")
+            .setMessage("Eski sürümler mikrofona aynı anda erişmeye çalışabilir. "
+                +"Kullanmadığın eski sürümleri uygulama ayarlarından durdur veya kaldır. "
+                +"PANDORA 24 ve Hermes sunucusu etkilenmez.")
+            .setItems(labels,(d,which)->{
+                android.net.Uri uri=android.net.Uri.parse("package:"+found.get(which)[1]);
+                Intent open=new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,uri);
+                launch(open);
+            })
+            .setNegativeButton("Kapat",null).show();
+    }
+
     private void showVoiceDiagnostics(){
         boolean mic=checkSelfPermission(Manifest.permission.RECORD_AUDIO)
             ==PackageManager.PERMISSION_GRANTED;
@@ -761,12 +812,14 @@ public class MainActivity extends Activity {
             +"\nGERÇEK MİKROFON DURUMU: "+WakeMonitorService.microphoneState
             +"\nSon Hey Pandora: "+(elapsed<0?"Henüz algılanmadı":elapsed+" saniye önce")
             +"\nSon hata: "+(WakeMonitorService.lastError.isEmpty()?"Yok":WakeMonitorService.lastError)
+            +"\nEski PANDORA uygulamaları: "+legacyPandoras().size()
             +"\n\nAndroid konuşma tanıyıcısı bu arka plan hizmetinde kullanılmıyor."
             +"\nSes cihazı yönlendirme başarısızsa telefon mikrofonuna geçilmez."
             +"\nSistem mikrofon göstergesi Android tarafından gösterilebilir.";
         new AlertDialog.Builder(this).setTitle("PANDORA · Mikrofon tanılama")
             .setMessage(report)
             .setNegativeButton("Kapat",null)
+            .setNeutralButton("Eski sürümleri göster",(d,w)->showLegacyPandoras())
             .setPositiveButton(mic&&bt?"Dinlemeyi aç / kapat":"İzinleri aç",
                 (d,w)->{if(!mic||!bt)requestWakePermissions(false);
                         else toggleWakeMonitor();})
