@@ -10,8 +10,9 @@ public final class WakePhraseGate {
         String s=raw.toLowerCase(new Locale("tr","TR"))
             .replaceAll("[^\\p{L}\\s]"," ")
             .replaceAll("\\s+"," ").trim();
-        return s.equals("hey pandora") || s.equals("hi pandora")
-            || s.equals("hey pan dora") || s.equals("hey pandora hey pandora");
+        return s.equals("pandora") || s.equals("hey pandora") || s.equals("hi pandora")
+            || s.equals("hey pan dora") || s.equals("hey pandora hey pandora")
+            || s.equals("pandora unk") || s.equals("hey pandora unk");
     }
     /**
      * Do not activate on partial transcripts. A completed utterance must have
@@ -21,6 +22,12 @@ public final class WakePhraseGate {
     public static boolean verified(String finalText,double confidence,long voicedMs){
         if(!isWakeText(finalText))return false;
         if(voicedMs<350 || voicedMs>5500)return false;
+        boolean bare=finalText.toLowerCase(new Locale("tr","TR")).trim()
+            .replaceAll("[^\\p{L}\\s]"," ").replaceAll("\\s+"," ").trim()
+            .equals("pandora");
+        if(bare)return confidence>=0.84 || (confidence<0 && voicedMs>=850);
+        if(finalText.toLowerCase(new Locale("tr","TR")).contains("unk"))
+            return confidence>=0.83 && voicedMs>=500;
         return confidence>=0.58 || (confidence<0 && voicedMs>=680);
     }
 }
