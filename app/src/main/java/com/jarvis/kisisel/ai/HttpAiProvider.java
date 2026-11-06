@@ -8,7 +8,7 @@ import java.io.OutputStream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-/** Only calls hardcoded HTTPS OpenRouter or loopback localhost. No arbitrary URL input. */
+/** Hardcoded loopback, OpenRouter or Groq HTTPS only. No arbitrary remote URLs. */
 public final class HttpAiProvider implements AiProvider {
  private final String id,endpoint,model,token;
  private final int timeoutMs;
@@ -34,6 +34,7 @@ public final class HttpAiProvider implements AiProvider {
    cancellation.ensureActive();
    if(!endpoint.equals("http://127.0.0.1:8080/v1/chat/completions") &&
       !endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL) &&
+      !endpoint.equals("https://api.groq.com/openai/v1/chat/completions") &&
       !endpoint.equals("http://127.0.0.1:8642/v1/chat/completions"))throw new SecurityException("Unsupported endpoint");
    HttpURLConnection con=(HttpURLConnection)new URL(endpoint).openConnection();
    cancellation.attach(con);
@@ -44,6 +45,9 @@ public final class HttpAiProvider implements AiProvider {
      if(token!=null && !token.isEmpty())con.setRequestProperty("Authorization","Bearer "+token);
      if(endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL) && !FreeCloudPolicy.isFreeOnly(model))
        throw new SecurityException("Ücretli bulut modeli yasaklı");
+     boolean groq=endpoint.equals("https://api.groq.com/openai/v1/chat/completions");
+     if(groq && !"openai/gpt-oss-20b".equals(model))
+       throw new SecurityException("Groq model allowlist mismatch");
      con.setDoOutput(true);
      String resolvedModel=model;
      // llama.cpp may be started without --alias, in which case discover its actual loaded model id.
@@ -62,11 +66,20 @@ public final class HttpAiProvider implements AiProvider {
      cancellation.ensureActive();
      JSONObject payload=new JSONObject().put("model",resolvedModel).put("messages",messages)
        .put("stream",false)
-       .put("max_tokens",endpoint.equals("http://127.0.0.1:8080/v1/chat/completions")?128:1024);
+       .put("max_tokens",endpoint.equals("http://127.0.0.1:8080/v1/chat/completions")?128:(groq?800:1024));
+     if(groq)payload.put("reasoning_effort","low");
      byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);
      try(OutputStream out=con.getOutputStream()){out.write(bytes);}
      int status=con.getResponseCode();
-     if(status!=200)throw new Exception(FreeCloudPolicy.httpMessage(status,endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL)));
+     if(status!=200) {
+       if(groq) {
+         if(status==401||status==403)throw new Exception("Groq anahtarı geçersiz veya yetkisiz (HTTP "+status+").");
+         if(status==429)throw new Exception("Groq ücretsiz hesap kotası doldu (HTTP 429). Daha sonra tekrar dene ya da Hermes'i seç.");
+         if(status>=500)throw new Exception("Groq servisi şu anda yanıt veremiyor (HTTP "+status+").");
+         throw new Exception("Groq HTTP "+status+". Model / hesap ayarlarını kontrol et.");
+       }
+       throw new Exception(FreeCloudPolicy.httpMessage(status,endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL)));
+     }
      StringBuilder response=new StringBuilder();
      try(InputStream in=con.getInputStream();BufferedReader br=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8))){
        String line;while((line=br.readLine())!=null)response.append(line);
