@@ -169,8 +169,11 @@ public final class WakeMonitorService extends Service {
                 lastWakeMs=android.os.SystemClock.elapsedRealtime();
                 microphoneState="Hey Pandora algılandı · komut dinleniyor";
                 OverlayPulse.show(WakeMonitorService.this);
-                // Deliberately no beep / TTS. The headphone will not chime on
-                // random sounds, and the assistant won't recognize its own cue.
+                if(getSharedPreferences("jarvis_settings",MODE_PRIVATE)
+                    .getBoolean("pandora_wake_feedback",true))
+                    WakeTone.play(WakeMonitorService.this);
+                // Only the verified wake phrase triggers one original soft cue.
+                // Ambient sound, model loading and STT restarts play nothing.
             }
             @Override public void result(String phrase){
                 if(stopped || headsetPaused || speaking || processingAction)return;
