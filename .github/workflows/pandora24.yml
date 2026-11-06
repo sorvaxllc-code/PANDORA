@@ -121,3 +121,31 @@ jobs:
           profile: pixel_5
           disable-animations: true
           script: bash scripts/emulator_smoke.sh
+
+  private-prerelease:
+    needs: [apk, android13-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/pandora24-wake-audio-route'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: PANDORA24-STABLE-APK
+          path: signed-apk
+      - name: Publish private beta APK (real direct download, no ZIP)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp signed-apk/app-release.apk PANDORA24.apk
+          if gh release view "v2.4.0-rc1" >/dev/null 2>&1; then
+            gh release upload "v2.4.0-rc1" PANDORA24.apk --clobber
+          else
+            gh release create "v2.4.0-rc1" PANDORA24.apk \
+              --target "$GITHUB_SHA" \
+              --title "PANDORA 24 · Sessiz Hey Pandora" \
+              --notes "Android 13 kulaklık mikrofonu yönlendirmesi, çevrimdışı Hey Pandora, aynı neon tema. Bluetooth donanımı gerçek kullanıcı cihazında ayrıca test edilmelidir. Önce eski PANDORA 22/23 ses hizmetlerini durdur." \
+              --prerelease
+          fi
