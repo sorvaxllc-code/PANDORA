@@ -16,7 +16,7 @@
         android:allowBackup="false"
         android:label="${pandoraAppName}"
         android:theme="@style/JarvisTheme"
-        android:icon="@drawable/pandora_icon" android:roundIcon="@drawable/pandora_icon"
+        android:icon="@drawable/pandora_neon_icon" android:roundIcon="@drawable/pandora_neon_icon"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <activity
