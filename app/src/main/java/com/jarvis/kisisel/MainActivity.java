@@ -479,6 +479,9 @@ public class MainActivity extends Activity {
             0xFF3DBBFF,()->showCaptainHistory());
         addToolsCard(agentsBody,"Jev · Karar & Strateji",
             "Harici Jev karar modeli · bağlantı isteğe bağlı",0xFFD36CFF,()->showJevInfo());
+        addToolsCard(agentsBody,"Canlı veri kaynakları",
+            "Hangi haber, grafik ve sosyal medya kaynağı bağlı?",
+            0xFF48C2FF,()->showIntegrationStatus());
         addToolsCard(agentsBody,"Hermes · Görev Yürütücü",
             "Termux üzerinden mevcut Hermes bağlantın",0xFF379DFF,()->{
                 modelRouter.setMode("HERMES");switchPage(1);
@@ -556,6 +559,9 @@ public class MainActivity extends Activity {
             0xFFFFC174,()->showLegacyPandoras());
         addToolsCard(toolBody,"Ses & konuşma ayarları",
             "Türkçe ses, ton, hız ve sesli yanıt",0xFF4DB6FF,()->showSettings());
+        addToolsCard(toolBody,"Kaynaklar ve ajan bağlantıları",
+            "Telegram, X, haber, fiyat ve görsel araçlarının gerçek durumu",
+            0xFF72BFFF,()->showIntegrationStatus());
         addToolsCard(toolBody,"Groq · Hızlı sohbet",
             "GPT-OSS 20B · doğrudan bağlantı, Hermes beklemesi yok",
             0xFFB783FF,()->editGroqKey());
@@ -1583,6 +1589,27 @@ public class MainActivity extends Activity {
             : modelRouter.askAsync(agentPrompt(message),callback);
     }
 
+
+    private void showIntegrationStatus(){
+        String status="Yapay zekâ sağlayıcıları:\n"
+            +"• Groq hızlı sohbet: "+(GroqVault.exists(this)?"Anahtar kayıtlı":"Anahtar yok")+"\n"
+            +"• Hermes yerel görev ajanı: "+
+              (com.jarvis.kisisel.ai.HermesVault.exists(this)?"Anahtar kayıtlı; Termux ayrıca açık olmalı":"Anahtar yok")+"\n\n"
+            +"Gerçek zamanlı/veri araçları:\n"
+            +"• Telegram kullanıcı hesabı: BAĞLI DEĞİL (TDLib ile ayrı oturum açma gerekir)\n"
+            +"• X/Twitter hesabı: BAĞLI DEĞİL (OAuth/API ve ücret koşulları gerekir)\n"
+            +"• Haber akışı: OTOMATİK İZLEME KAPALI (kaynak/abonelik henüz tanımlı değil)\n"
+            +"• Kripto ve fiyat verileri: CANLI API BAĞLANTISI YOK\n"
+            +"• Görsel üretimi: HENÜZ GÖRSEL API'Sİ BAĞLANMADI\n\n"
+            +"PANDORA bu kaynaklardan canlı bilgi aldığını veya hesabında iş yaptığını iddia etmez."
+            +" Önce ücretsiz sağlayıcılar, daha sonra onayınla ücretli servisler bağlanabilir.";
+        new AlertDialog.Builder(this).setTitle("PANDORA · Bağlantı merkezi")
+            .setMessage(status)
+            .setNegativeButton("Kapat",null)
+            .setNeutralButton("Telegram geliştirici API",(d,w)->openUrl("https://core.telegram.org/tdlib"))
+            .setPositiveButton("X API bilgisi",(d,w)->openUrl("https://developer.x.com"))
+            .show();
+    }
 
     private void showCaptainPanel(){
         EditText goal=new EditText(this);
