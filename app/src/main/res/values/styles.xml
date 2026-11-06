@@ -7,6 +7,13 @@
     <item name="android:statusBarColor">#070914</item>
     <item name="android:navigationBarColor">#070707</item>
     <item name="android:windowActionModeOverlay">true</item>
-    <item name="android:colorAccent">#9B65FF</item>
+    <item name="android:colorAccent">#B66BFF</item>
+    <item name="android:alertDialogTheme">@style/PandoraDialogTheme</item>
+  </style>
+  <style name="PandoraDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+    <item name="android:windowBackground">@drawable/pandora_dialog_background</item>
+    <item name="android:colorAccent">#BB7DFF</item>
+    <item name="android:textColorPrimary">#FFFFFF</item>
+    <item name="android:textColorSecondary">#B7ACDC</item>
   </style>
 </resources>
