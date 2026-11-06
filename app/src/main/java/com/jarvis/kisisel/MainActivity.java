@@ -794,10 +794,7 @@ public class MainActivity extends Activity {
             labels[i]=found.get(i)[0]+" · Uygulama ayarlarını aç";
         }
         new AlertDialog.Builder(this)
-            .setTitle("Mikrofon çakışmalarını gider")
-            .setMessage("Eski sürümler mikrofona aynı anda erişmeye çalışabilir. "
-                +"Kullanmadığın eski sürümleri uygulama ayarlarından durdur veya kaldır. "
-                +"PANDORA 24 ve Hermes sunucusu etkilenmez.")
+            .setTitle("Eski PANDORA'ları durdur / kaldır")
             .setItems(labels,(d,which)->{
                 android.net.Uri uri=android.net.Uri.parse("package:"+found.get(which)[1]);
                 Intent open=new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,uri);
