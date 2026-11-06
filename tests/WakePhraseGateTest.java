@@ -3,6 +3,10 @@ public final class WakePhraseGateTest {
     static void require(boolean ok){if(!ok)throw new AssertionError("WakePhraseGate failed");}
     public static void main(String[] args){
         require(WakePhraseGate.verified("hey pandora",.88,850));
+        require(WakePhraseGate.verified("pandora",.91,900));
+        require(!WakePhraseGate.verified("pandora",.60,900));
+        require(WakePhraseGate.verified("pandora unk",.91,1200));
+        require(!WakePhraseGate.verified("pandora unk",.42,1200));
         require(WakePhraseGate.verified("hi pandora",.73,830));
         require(WakePhraseGate.verified("hey pandora",-1,850));
         require(!WakePhraseGate.verified("hey pandora",.38,900));
