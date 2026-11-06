@@ -978,6 +978,9 @@ public class MainActivity extends Activity {
                 showPhoneCallConfirmation(target);return;
             }
         }
+        if(com.jarvis.kisisel.core.CaptainPlanner.shouldDelegate(q)){
+            startCaptainTask(command);return;
+        }
         if(skillRegistry.tryHandle(this,q,this::reply)) return;
         if (q.contains("ekrana bak") || q.contains("ekranı analiz") ||
             q.contains("bu haber ne demek") || q.contains("şu haber ne demek")) {
