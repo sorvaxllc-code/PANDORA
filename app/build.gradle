@@ -8,8 +8,8 @@ android {
         applicationId 'com.jarvis.kisisel'
         minSdk 26
         targetSdk 35
-        versionCode 22
-        versionName '2.2.0-neon-voice'
+        versionCode 23
+        versionName '2.3.0-quiet-offline'
         manifestPlaceholders = [pandoraAppName: 'PANDORA']
     }
 
@@ -33,8 +33,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix '.trial22'
-            manifestPlaceholders = [pandoraAppName: 'PANDORA 22']
+            applicationIdSuffix '.trial23'
+            manifestPlaceholders = [pandoraAppName: 'PANDORA 23']
         }
         release {
             // Separate, stable ID; old differently signed apps remain untouched.
@@ -51,5 +51,7 @@ android {
 // Bundled OCR model: works on-device without a separate server/API key.
 // ML Kit OCR is distinct from the AI model used to summarize text.
 dependencies {
+    implementation 'net.java.dev.jna:jna:5.18.1@aar'
+    implementation 'com.alphacephei:vosk-android:0.3.75@aar'
     implementation 'com.google.mlkit:text-recognition:16.0.1'
 }
