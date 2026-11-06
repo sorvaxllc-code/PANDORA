@@ -77,9 +77,21 @@ public class MainActivity extends Activity {
     private OrbView voiceOrb;
     private LinearLayout rootPage;
     private FrameLayout stage;
-    private final View[] screens=new View[4];
-    private final TextView[] tabs=new TextView[4];
+    private final View[] screens=new View[6];
+    private final TextView[] tabs=new TextView[5];
     private TextView activeAgentChip;
+    private TextView listenIndicator;
+    private TextView voiceIndicator;
+    private NeonWaveformView waveform;
+    private LinearLayout projectItems;
+    private final android.os.Handler voiceHandler=new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable voiceTicker=new Runnable(){
+        @Override public void run(){
+            if(isFinishing()||isDestroyed())return;
+            refreshVoiceIndicator();
+            voiceHandler.postDelayed(this,1300);
+        }
+    };
     private String activeAgent="Genel";
     private int agentColor=0xFF9B65FF;
     private int agentSecondary=0xFF22BAFF;
@@ -232,217 +244,440 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    private void buildUi() {
+
+    private TextView actionTile(String title,String caption,int accent,Runnable action){
+        LinearLayout.LayoutParams ignore=null;
+        TextView view=text(title+"\n"+caption,12,Color.WHITE,true);
+        view.setLineSpacing(dp(3),1f);
+        view.setPadding(dp(13),dp(14),dp(10),dp(13));
+        view.setBackground(neonCard(0xFF16152E,16,((accent&0x00FFFFFF)|0x66000000)));
+        view.setOnClickListener(v->action.run());
+        return view;
+    }
+    private TextView tapChip(String title,int color,Runnable onTap){
+        TextView result=text(title,12,color,true);
+        result.setGravity(Gravity.CENTER);
+        result.setPadding(dp(7),dp(8),dp(7),dp(8));
+        result.setBackground(neonCard(0xFF111329,15,((color&0x00FFFFFF)|0x66000000)));
+        result.setOnClickListener(v->onTap.run());
+        return result;
+    }
+    private void addToolsCard(LinearLayout body,String title,String subtitle,int color,Runnable action){
+        LinearLayout card=new LinearLayout(this);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(13),dp(12),dp(11),dp(12));
+        card.setBackground(neonCard(0xFF15162D,15,((color&0x00FFFFFF)|0x55000000)));
+        TextView icon=text("✦",19,color,true);
+        icon.setGravity(Gravity.CENTER);
+        card.addView(icon,lp(dp(38),dp(44)));
+        LinearLayout label=new LinearLayout(this);label.setOrientation(LinearLayout.VERTICAL);
+        label.addView(text(title,14,Color.WHITE,true));
+        TextView detail=text(subtitle,11,MUTED,false);
+        detail.setPadding(0,dp(4),0,0);label.addView(detail);
+        card.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+        TextView arrow=text("›",24,color,false);card.addView(arrow);
+        LinearLayout.LayoutParams cp=lp(-1,-2);cp.bottomMargin=dp(9);
+        body.addView(card,cp);
+        card.setOnClickListener(v->action.run());
+    }
+    private void buildUi(){
         rootPage=new LinearLayout(this);
         rootPage.setOrientation(LinearLayout.VERTICAL);
         rootPage.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{0xFF070915,0xFF10112A,0xFF070914}));
-        rootPage.setPadding(dp(16),dp(10),dp(16),dp(4));
+            new int[]{0xFF060713,0xFF11102C,0xFF080A18}));
+        rootPage.setPadding(dp(12),dp(7),dp(12),dp(5));
         setContentView(rootPage);
 
-        LinearLayout heading=new LinearLayout(this);
-        heading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView emblem=text("P",24,Color.WHITE,true);
-        emblem.setGravity(Gravity.CENTER);
-        emblem.setBackground(neonCard(0xFF302062,16,0xFF8B65FA));
-        heading.addView(emblem,lp(dp(46),dp(46)));
-        emblem.setOnClickListener(v->switchPage(0));
-        LinearLayout titleGroup=new LinearLayout(this);titleGroup.setOrientation(LinearLayout.VERTICAL);
-        titleGroup.setPadding(dp(12),0,0,0);
-        TextView brand=text("P A N D O R A",18,Color.WHITE,true);
-        TextView subtitle=text("KİŞİSEL YAPAY ZEKÂ",10,0xFF9B9DBF,false);
-        titleGroup.addView(brand);titleGroup.addView(subtitle);
-        heading.addView(titleGroup,new LinearLayout.LayoutParams(0,-2,1));
-        Button menu=roundButton("☰",0xFF1D1B35);
-        menu.setContentDescription("Ayarlar ve diğer araçlar");
-        heading.addView(menu,lp(dp(47),dp(45)));
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
+        Button menu=roundButton("☰",0xFF141329);
+        menu.setContentDescription("Araçlar ve ayarlar");top.addView(menu,lp(dp(48),dp(49)));
         menu.setOnClickListener(v->showNavigation());
-        rootPage.addView(heading,lp(-1,dp(55)));
+        LinearLayout wordmark=new LinearLayout(this);wordmark.setOrientation(LinearLayout.VERTICAL);
+        wordmark.setGravity(Gravity.CENTER);
+        TextView brand=text("P A N D O R A",21,Color.WHITE,true);
+        brand.setGravity(Gravity.CENTER);wordmark.addView(brand);
+        TextView sub=text("Kişisel Yapay Zekâ Asistanın",11,0xFFABB2D2,false);
+        sub.setGravity(Gravity.CENTER);wordmark.addView(sub);
+        top.addView(wordmark,new LinearLayout.LayoutParams(0,-2,1));
+        Button bell=roundButton("♢",0xFF141329);
+        bell.setContentDescription("Sistem durumu");
+        bell.setOnClickListener(v->showSystemReadiness());
+        top.addView(bell,lp(dp(48),dp(49)));
+        rootPage.addView(top,lp(-1,dp(63)));
 
-        LinearLayout strip=new LinearLayout(this);
-        strip.setGravity(Gravity.CENTER_VERTICAL);
-        strip.setPadding(dp(11),dp(6),dp(11),dp(6));
-        strip.setBackground(neonCard(0xFF14152B,13,0xFF332F69));
-        LinearLayout.LayoutParams stripLp=lp(-1,dp(44));stripLp.topMargin=dp(8);
-        activeAgentChip=neonLabel("◈ GENEL AJAN",10,0xFFC7B2FF,true);
-        strip.addView(activeAgentChip,new LinearLayout.LayoutParams(0,-2,1));
-        status=neonLabel("HAZIR",10,MUTED,false);
-        strip.addView(status);
-        modeBadge=neonLabel("",10,0xFF8494C8,false);
-        rootPage.addView(strip,stripLp);
+        LinearLayout modeRow=new LinearLayout(this);
+        modeRow.setPadding(0,dp(8),0,dp(7));
+        TextView jev=tapChip("♧  JEV",0xFFBA82FF,()->showJevInfo());
+        TextView hermes=tapChip("◇  HERMES",0xFF39B9FF,()->{
+            modelRouter.setMode("HERMES");
+            showStatus("HAZIR · HERMES");
+            Toast.makeText(this,"Hermes seçildi",Toast.LENGTH_SHORT).show();
+        });
+        TextView auto=tapChip("∞  AUTO",0xFFBA82FF,()->{
+            modelRouter.setMode("AUTO");
+            showStatus("HAZIR · OTOMATİK");
+            Toast.makeText(this,"OpenRouter / yerel otomatik mod seçildi",Toast.LENGTH_LONG).show();
+        });
+        LinearLayout.LayoutParams m1=new LinearLayout.LayoutParams(0,dp(43),1);m1.rightMargin=dp(6);
+        modeRow.addView(jev,m1);
+        LinearLayout.LayoutParams m2=new LinearLayout.LayoutParams(0,dp(43),1);m2.rightMargin=dp(6);
+        modeRow.addView(hermes,m2);
+        modeRow.addView(auto,new LinearLayout.LayoutParams(0,dp(43),1));
+        rootPage.addView(modeRow,lp(-1,dp(60)));
+
+        LinearLayout statusRow=new LinearLayout(this);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        activeAgentChip=text("✧  PANDORA",10,0xFFB997FF,true);
+        statusRow.addView(activeAgentChip,new LinearLayout.LayoutParams(0,-2,1));
+        status=text("HAZIR",10,MUTED,false);statusRow.addView(status);
+        modeBadge=text("",10,MUTED,false);
+        rootPage.addView(statusRow,lp(-1,dp(22)));
 
         stage=new FrameLayout(this);
         LinearLayout.LayoutParams stageLp=new LinearLayout.LayoutParams(-1,0,1);
-        stageLp.topMargin=dp(10);rootPage.addView(stage,stageLp);
+        stageLp.topMargin=dp(3);
+        rootPage.addView(stage,stageLp);
 
-        // Screen 1: Visual home is intentionally independent of conversation history.
-        ScrollView homeScroll=new ScrollView(this);homeScroll.setFillViewport(false);
-        homeScroll.setVerticalScrollBarEnabled(false);
+        // HOME — glowing P core exactly as the approved visual identity.
+        ScrollView homeScroll=new ScrollView(this);
+        homeScroll.setFillViewport(false);homeScroll.setVerticalScrollBarEnabled(false);
         LinearLayout home=new LinearLayout(this);home.setOrientation(LinearLayout.VERTICAL);
-        home.setPadding(dp(1),dp(10),dp(1),dp(12));
-        TextView greet=text("Merhaba, yeniden hoş geldin.",22,Color.WHITE,true);
-        home.addView(greet);
-        TextView lead=text("Pandora hazır. Bugün birlikte ne yapalım?",13,MUTED,false);
-        lead.setPadding(0,dp(6),0,0);home.addView(lead);
+        home.setPadding(dp(2),dp(1),dp(2),dp(11));
         orb=new OrbView(this);orb.setAccent(agentColor,agentSecondary);
-        LinearLayout.LayoutParams orbLp=lp(-1,dp(248));orbLp.topMargin=dp(2);
-        home.addView(orb,orbLp);
-        orb.setOnClickListener(v->switchPage(3));
-        TextView orbCaption=text("✦  AKILLI ÇEKİRDEK  ·  "+activeAgent.toUpperCase(new Locale("tr","TR")),11,0xFFC5BDFF,true);
-        orbCaption.setGravity(Gravity.CENTER);home.addView(orbCaption);
-        TextView actionHead=text("Hızlı başlangıç",15,Color.WHITE,true);
-        LinearLayout.LayoutParams ah=lp(-1,-2);ah.topMargin=dp(24);home.addView(actionHead,ah);
+        LinearLayout.LayoutParams orbLayout=lp(-1,dp(242));
+        home.addView(orb,orbLayout);
+        orb.setOnClickListener(v->switchPage(5));
+        waveform=new NeonWaveformView(this);
+        waveform.setColors(agentColor,agentSecondary);
+        LinearLayout.LayoutParams waveLp=lp(-1,dp(32));
+        waveLp.topMargin=dp(1);
+        home.addView(waveform,waveLp);
+        listenIndicator=text("Kulaklıkla Hey Pandora için hazır",13,0xFFEAE5FF,false);
+        listenIndicator.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams li=lp(-1,dp(31));home.addView(listenIndicator,li);
 
-        LinearLayout rowA=new LinearLayout(this);
-        LinearLayout.LayoutParams rpa=lp(-1,-2);rpa.topMargin=dp(10);
-        TextView talk=tile("◉  Sesli görüşme","Pandora ile konuş",0xFF9961FF,()->switchPage(3));
-        TextView chat=tile("✧  Sohbet","Bir mesaj gönder",0xFF28BAFF,()->switchPage(1));
-        LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(78),1);
-        half.rightMargin=dp(8);rowA.addView(talk,half);
-        rowA.addView(chat,new LinearLayout.LayoutParams(0,dp(78),1));
-        home.addView(rowA,rpa);
-        LinearLayout rowB=new LinearLayout(this);
-        LinearLayout.LayoutParams rpb=lp(-1,-2);rpb.topMargin=dp(8);
-        TextView agents=tile("◇  Ajanlar","Uzmanını seç",0xFF28BAFF,()->switchPage(2));
-        TextView reminders=tile("◷  Hatırlatıcı","Yeni bir görev planla",0xFF58E7CD,()->promptReminder(null));
-        LinearLayout.LayoutParams half2=new LinearLayout.LayoutParams(0,dp(78),1);
-        half2.rightMargin=dp(8);rowB.addView(agents,half2);
-        rowB.addView(reminders,new LinearLayout.LayoutParams(0,dp(78),1));
-        home.addView(rowB,rpb);
-        TextView readiness=text("▤  Bağlantı, izinler ve sistem durumunu kontrol et  ›",12,0xFFCCD1F1,false);
-        readiness.setPadding(dp(14),dp(15),dp(12),dp(15));
-        readiness.setBackground(neonCard(0xFF101429,15,0xFF343454));
-        LinearLayout.LayoutParams readyLp=lp(-1,-2);readyLp.topMargin=dp(16);
-        home.addView(readiness,readyLp);readiness.setOnClickListener(v->showSystemReadiness());
+        LinearLayout quick=new LinearLayout(this);
+        quick.setGravity(Gravity.CENTER);
+        TextView keyboard=tapChip("⌨",0xFFCCCCFF,()->switchPage(1));
+        TextView camera=tapChip("▣",0xFF34B5FF,()->launch(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)));
+        TextView microphone=tapChip("●",0xFFFFFFFF,()->switchPage(5));
+        microphone.setTextSize(25);
+        microphone.setBackground(neonCard(0xFF5A31AF,24,0xFFB56CFF));
+        microphone.setContentDescription("Sesli görüşmeyi aç");
+        TextView audio=tapChip("≋",0xFFBF9AFF,()->switchPage(5));
+        TextView add=tapChip("+",0xFFDFB8FF,()->promptNote());
+        LinearLayout.LayoutParams small=new LinearLayout.LayoutParams(0,dp(51),1);
+        small.rightMargin=dp(7);quick.addView(keyboard,small);
+        LinearLayout.LayoutParams small2=new LinearLayout.LayoutParams(0,dp(51),1);
+        small2.rightMargin=dp(7);quick.addView(camera,small2);
+        LinearLayout.LayoutParams center=new LinearLayout.LayoutParams(0,dp(58),1.13f);
+        center.rightMargin=dp(7);quick.addView(microphone,center);
+        LinearLayout.LayoutParams small3=new LinearLayout.LayoutParams(0,dp(51),1);
+        small3.rightMargin=dp(7);quick.addView(audio,small3);
+        quick.addView(add,new LinearLayout.LayoutParams(0,dp(51),1));
+        LinearLayout.LayoutParams qlp=lp(-1,dp(65));qlp.topMargin=dp(8);
+        home.addView(quick,qlp);
+
+        TextView suggestion=actionTile("✦  Ne yapmamı istersin?",
+            "Araştır, planla, analiz et veya mesaj yaz...",0xFFA765FF,()->switchPage(1));
+        LinearLayout.LayoutParams sug=lp(-1,dp(79));sug.topMargin=dp(10);
+        home.addView(suggestion,sug);
+        TextView agent=actionTile("✧  Aktif ajan: "+activeAgent,
+            "Uzman ajanını değiştirmek için dokun",agentColor,()->switchPage(2));
+        LinearLayout.LayoutParams agp=lp(-1,dp(73));agp.topMargin=dp(9);
+        home.addView(agent,agp);
+        LinearLayout facts=new LinearLayout(this);
+        TextView health=tapChip("♧  Sistem\nDurum",0xFF4DDDDD,()->showSystemReadiness());
+        TextView notes=tapChip("▤  Hafıza\n"+memory.notes().size()+" not",0xFF5EBEFF,()->showNotes());
+        TextView reminders=tapChip("◷  Görev\n"+memory.pendingReminders().size()+" aktif",
+            0xFFBB7BFF,()->showReminders());
+        LinearLayout.LayoutParams statLp=new LinearLayout.LayoutParams(0,dp(67),1);
+        statLp.rightMargin=dp(7);facts.addView(health,statLp);
+        LinearLayout.LayoutParams statLp2=new LinearLayout.LayoutParams(0,dp(67),1);
+        statLp2.rightMargin=dp(7);facts.addView(notes,statLp2);
+        facts.addView(reminders,new LinearLayout.LayoutParams(0,dp(67),1));
+        LinearLayout.LayoutParams factLayout=lp(-1,-2);factLayout.topMargin=dp(13);
+        home.addView(facts,factLayout);
         homeScroll.addView(home);
         screens[0]=homeScroll;stage.addView(homeScroll,new FrameLayout.LayoutParams(-1,-1));
 
-        // Screen 2: Existing Hermes + local memory chat, presented in new visual shell.
-        LinearLayout conversation=new LinearLayout(this);
-        conversation.setOrientation(LinearLayout.VERTICAL);
-        TextView chatHeadline=text("Sohbet",22,Color.WHITE,true);
-        conversation.addView(chatHeadline);
-        TextView chatHint=text("Seçili ajan: "+activeAgent+"  •  Sohbet geçmişin cihazda tutulur",11,MUTED,false);
-        chatHint.setPadding(0,dp(4),0,dp(9));
-        conversation.addView(chatHint);
+        // CHAT — existing Hermes/ModelRouter and encrypted storage are preserved.
+        LinearLayout chatPage=new LinearLayout(this);
+        chatPage.setOrientation(LinearLayout.VERTICAL);
+        chatPage.addView(text("Sohbet",22,Color.WHITE,true));
+        TextView chatCaption=text("Ajan: "+activeAgent+"  ·  Yapay zekâ sohbeti",12,MUTED,false);
+        chatCaption.setPadding(0,dp(5),0,dp(8));chatPage.addView(chatCaption);
         scroll=new ScrollView(this);scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
         feed=new LinearLayout(this);feed.setOrientation(LinearLayout.VERTICAL);
-        feed.setPadding(dp(0),dp(6),dp(0),dp(11));
-        scroll.addView(feed);
-        conversation.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout composer=new LinearLayout(this);
-        composer.setGravity(Gravity.CENTER_VERTICAL);
-        composer.setPadding(dp(3),dp(4),dp(3),dp(4));
-        composer.setBackground(neonCard(0xFF19192F,25,0xFF55447B));
-        Button plus=roundButton("+",0xFF1D1C37);plus.setContentDescription("Araçlar");
-        composer.addView(plus,lp(dp(39),dp(47)));
+        feed.setPadding(0,dp(5),0,dp(9));scroll.addView(feed);
+        chatPage.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout composer=new LinearLayout(this);composer.setGravity(Gravity.CENTER_VERTICAL);
+        composer.setPadding(dp(4),dp(4),dp(4),dp(4));
+        composer.setBackground(neonCard(0xFF17162D,24,0xFF683EAE));
+        Button plus=roundButton("+",0xFF23203D);
+        plus.setContentDescription("Hızlı araçlar");
         plus.setOnClickListener(v->showNavigation());
+        composer.addView(plus,lp(dp(37),dp(47)));
         input=new EditText(this);input.setTextSize(14);input.setTextColor(Color.WHITE);
         input.setSingleLine(false);input.setMinLines(1);input.setMaxLines(4);
-        input.setHintTextColor(0xFF9E9EBB);input.setHint("Pandora'ya mesaj yaz");
+        input.setHintTextColor(0xFF979DBE);input.setHint("Pandora'ya mesaj yaz...");
         input.setBackgroundColor(Color.TRANSPARENT);
         input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        input.setPadding(dp(8),dp(7),dp(4),dp(7));
+        input.setPadding(dp(7),dp(6),dp(4),dp(6));
         composer.addView(input,new LinearLayout.LayoutParams(0,-2,1));
-        Button mic=roundButton("♩",0xFF232344);mic.setTextColor(0xFFB5A6FF);
-        mic.setContentDescription("Kulaklıkla sesli konuş");
-        composer.addView(mic,lp(dp(42),dp(47)));mic.setOnClickListener(v->listen());
-        stopButton=roundButton("■",0xFF41365F);stopButton.setContentDescription("İsteği durdur");
-        stopButton.setVisibility(View.GONE);stopButton.setOnClickListener(v->cancelModelRequest(true));
-        composer.addView(stopButton,lp(dp(38),dp(47)));
-        Button send=roundButton("➤",0xFF8C5AFF);send.setTextColor(Color.WHITE);
+        Button mic=roundButton("◉",0xFF282048);
+        mic.setContentDescription("Sesli görüşme");
+        composer.addView(mic,lp(dp(42),dp(47)));mic.setOnClickListener(v->switchPage(5));
+        stopButton=roundButton("■",0xFF342B53);
+        stopButton.setContentDescription("Yanıtı durdur");
+        stopButton.setVisibility(View.GONE);
+        stopButton.setOnClickListener(v->cancelModelRequest(true));
+        composer.addView(stopButton,lp(dp(39),dp(47)));
+        Button send=roundButton("➤",0xFF8243EE);
         send.setContentDescription("Mesajı gönder");
-        composer.addView(send,lp(dp(43),dp(47)));send.setOnClickListener(v->submit());
-        conversation.addView(composer);
-        screens[1]=conversation;stage.addView(conversation,new FrameLayout.LayoutParams(-1,-1));
+        send.setOnClickListener(v->submit());composer.addView(send,lp(dp(44),dp(47)));
+        chatPage.addView(composer);
+        screens[1]=chatPage;stage.addView(chatPage,new FrameLayout.LayoutParams(-1,-1));
 
-        // Screen 3: Specialist agents share the current trusted model connection.
-        ScrollView agentScroll=new ScrollView(this);
-        agentScroll.setVerticalScrollBarEnabled(false);
+        // AGENTS — per-agent neon color and specialist prompt.
+        ScrollView agentsScroll=new ScrollView(this);agentsScroll.setVerticalScrollBarEnabled(false);
         LinearLayout agentsBody=new LinearLayout(this);agentsBody.setOrientation(LinearLayout.VERTICAL);
-        agentsBody.setPadding(dp(1),dp(9),dp(1),dp(15));
-        agentsBody.addView(text("Uzman ajanlar",23,Color.WHITE,true));
-        TextView agentInfo=text("Her ajanın tonu ve rengi farklıdır. Hepsi aynı güvenli yapay zekâ bağlantısını kullanır.",12,MUTED,false);
-        agentInfo.setPadding(0,dp(9),0,dp(14));agentsBody.addView(agentInfo);
-        String[][] choices={
-            {"Genel","Gündelik sorular ve kişisel asistan","9B65FF","24BAFF"},
-            {"Araştırma","Bilgi, analiz ve kaynak değerlendirme","2ABFFF","4A88FF"},
-            {"Finans","Bütçe, veriler ve risk analizi","41DDA8","28B6E8"},
-            {"E-ticaret","Ürün, marka ve mağaza geliştirme","FFB76E","E66AF9"},
-            {"Yazılım","Kodlama, hata ayıklama ve mimari","A288FF","42C8FF"},
-            {"Yaratıcı","İçerik ve fikir geliştirme","F07BC8","9B65FF"},
-            {"Planlayıcı","Görevler, hatırlatmalar ve düzen","67DCE8","61A0FF"}
+        agentsBody.setPadding(dp(1),dp(8),dp(1),dp(10));
+        agentsBody.addView(text("Ajanlar",22,Color.WHITE,true));
+        TextView agentDesc=text("Uzman yapay zekâ ekiplerin",11,MUTED,false);
+        agentDesc.setPadding(0,dp(6),0,dp(12));agentsBody.addView(agentDesc);
+        addToolsCard(agentsBody,"Jev · Karar & Strateji",
+            "Harici Jev karar modeli · bağlantı isteğe bağlı",0xFFD36CFF,()->showJevInfo());
+        addToolsCard(agentsBody,"Hermes · Görev Yürütücü",
+            "Termux üzerinden mevcut Hermes bağlantın",0xFF379DFF,()->{
+                modelRouter.setMode("HERMES");switchPage(1);
+            });
+        final String[][] list={
+            {"Finans","Bütçe, kripto ve risk değerlendirme","#4BDB83","#36BEA2"},
+            {"E-ticaret","Ürün, pazar, SEO ve mağaza yönetimi","#FFAD4A","#EA7AFB"},
+            {"Araştırma","Derin araştırma, kaynak değerlendirme","#29C7F5","#3D8DFF"},
+            {"Yazılım","Kod, uygulama ve otomasyon desteği","#F1C152","#A685FF"},
+            {"Yaratıcı","Metin, görsel ve fikir geliştirme","#F26ACE","#A76AFF"},
+            {"Planlayıcı","Hedef, takvim ve günlük düzen","#9A69FF","#3DD0FF"},
+            {"Genel","Her konuda kişisel yardım","#A969FF","#37BEFF"}
         };
-        for(String[] item:choices) {
-            final String name=item[0];
-            final int color=Color.parseColor("#"+item[2]);
-            final int second=Color.parseColor("#"+item[3]);
-            LinearLayout card=new LinearLayout(this);card.setGravity(Gravity.CENTER_VERTICAL);
-            card.setPadding(dp(13),dp(12),dp(12),dp(12));
-            card.setBackground(neonCard(0xFF17162E,17,(color&0x00FFFFFF)|0x66000000));
-            TextView dot=text("●",22,color,true);dot.setGravity(Gravity.CENTER);
-            card.addView(dot,lp(dp(40),dp(43)));
-            LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);
-            labels.addView(text(name,16,Color.WHITE,true));
-            TextView desc=text(item[1],11,MUTED,false);
-            desc.setPadding(0,dp(4),0,0);labels.addView(desc);
-            card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
-            TextView arrow=text("›",23,color,false);card.addView(arrow);
-            LinearLayout.LayoutParams cp=lp(-1,-2);cp.bottomMargin=dp(9);
-            agentsBody.addView(card,cp);
-            card.setOnClickListener(v->chooseAgent(name,color,second));
+        for(String[] spec:list){
+            final int c=Color.parseColor(spec[2]);
+            final int c2=Color.parseColor(spec[3]);
+            addToolsCard(agentsBody,spec[0]+" Ajanı",spec[1],c,
+                ()->chooseAgent(spec[0],c,c2));
         }
-        agentScroll.addView(agentsBody);
-        screens[2]=agentScroll;stage.addView(agentScroll,new FrameLayout.LayoutParams(-1,-1));
+        agentsScroll.addView(agentsBody);
+        screens[2]=agentsScroll;stage.addView(agentsScroll,new FrameLayout.LayoutParams(-1,-1));
 
-        // Screen 4: Voice uses Android's actual speech-recognizer availability.
+        // PROJECTS — local progress, editable, never fabricated AI-completed tasks.
+        ScrollView projectScroll=new ScrollView(this);projectScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout projectBody=new LinearLayout(this);projectBody.setOrientation(LinearLayout.VERTICAL);
+        projectBody.setPadding(dp(2),dp(8),dp(2),dp(14));
+        LinearLayout projectTop=new LinearLayout(this);projectTop.setGravity(Gravity.CENTER_VERTICAL);
+        TextView projectsHead=text("Projeler",22,Color.WHITE,true);
+        projectTop.addView(projectsHead,new LinearLayout.LayoutParams(0,-2,1));
+        Button addProjectButton=roundButton("+",0xFF302051);
+        addProjectButton.setOnClickListener(v->createProject());
+        addProjectButton.setContentDescription("Yeni proje");
+        projectTop.addView(addProjectButton,lp(dp(44),dp(43)));
+        projectBody.addView(projectTop);
+        TextView projectHint=text("İlerlemeni cihazında takip et. Değerleri sen belirlersin.",11,MUTED,false);
+        projectHint.setPadding(0,dp(7),0,dp(11));projectBody.addView(projectHint);
+        projectItems=new LinearLayout(this);projectItems.setOrientation(LinearLayout.VERTICAL);
+        projectBody.addView(projectItems);
+        projectScroll.addView(projectBody);
+        screens[3]=projectScroll;stage.addView(projectScroll,new FrameLayout.LayoutParams(-1,-1));
+        renderProjects();
+
+        // TOOLS — replaces the enormous opaque gray native list from the screenshot.
+        ScrollView toolScroll=new ScrollView(this);toolScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout toolBody=new LinearLayout(this);toolBody.setOrientation(LinearLayout.VERTICAL);
+        toolBody.setPadding(dp(1),dp(9),dp(1),dp(14));
+        toolBody.addView(text("Araçlar & Ayarlar",22,Color.WHITE,true));
+        TextView toolsHint=text("Pandora'nın yetenekleri ve cihaz izinleri",11,MUTED,false);
+        toolsHint.setPadding(0,dp(7),0,dp(13));toolBody.addView(toolsHint);
+        addToolsCard(toolBody,"Hey Pandora · Otomatik uyandırma",
+            "Kulaklıkla çalışır • sistem mikrofon göstergesi görünür",0xFFA76DFF,()->toggleWakeMonitor());
+        addToolsCard(toolBody,"Ses & konuşma ayarları",
+            "Türkçe ses, ton, hız ve sesli yanıt",0xFF4DB6FF,()->showSettings());
+        addToolsCard(toolBody,"Hermes bağlantısı",
+            "API anahtarını düzenle • Termux:8642",0xFFBA7DFF,()->editHermesKey());
+        addToolsCard(toolBody,"Yapay zekâ modeli",
+            "Hermes, OpenRouter veya yerel model",0xFF76B1FF,()->chooseMode());
+        addToolsCard(toolBody,"Notlar ve hafıza",
+            "Not ekle, görüntüle ve yedekle",0xFF46DFCE,()->showNotes());
+        addToolsCard(toolBody,"Hatırlatıcılar",
+            "Bildirimleri planla ve takip et",0xFF9B7EFF,()->showReminders());
+        addToolsCard(toolBody,"Ekran analizi",
+            "Hızlı Ayarlar ve izinli ekran okuma",0xFF50BFFF,()->showQuickTileSetup());
+        addToolsCard(toolBody,"Telefon yetkileri",
+            "Erişilebilirlik ve uygulama izinleri",0xFFB979FA,()->openScreenAccessibilitySettings());
+        addToolsCard(toolBody,"Sistem durumu",
+            "Mikrofon, kulaklık, model ve izinler",0xFF4CE2C1,()->showSystemReadiness());
+        addToolsCard(toolBody,"Yeni sohbet başlat",
+            "Konuşma geçmişini temizle (onaylı)",0xFFA76DFF,()->new AlertDialog.Builder(this)
+                .setTitle("Yeni sohbet")
+                .setMessage("Önceki sohbeti silmek istiyor musun? Notlar korunur.")
+                .setNegativeButton("İptal",null)
+                .setPositiveButton("Yeni sohbet",(d,w)->{
+                    if(modelBusy)cancelModelRequest(false);
+                    memory.clearMessages();feed.removeAllViews();
+                    switchPage(1);
+                    reply("Yeni sohbet hazır.");
+                }).show());
+        toolScroll.addView(toolBody);
+        screens[4]=toolScroll;stage.addView(toolScroll,new FrameLayout.LayoutParams(-1,-1));
+
+        // FULL SCREEN VOICE — no external recognition dialog on wake-word usage.
         LinearLayout voice=new LinearLayout(this);voice.setOrientation(LinearLayout.VERTICAL);
         voice.setGravity(Gravity.CENTER_HORIZONTAL);
-        voice.setPadding(dp(8),dp(22),dp(8),dp(12));
-        TextView voiceTitle=text("Sesli görüşme",23,Color.WHITE,true);
+        voice.setPadding(dp(7),dp(9),dp(7),dp(12));
+        TextView voiceTitle=text("PANDORA",20,Color.WHITE,true);
         voiceTitle.setGravity(Gravity.CENTER);voice.addView(voiceTitle);
-        TextView voiceDescription=text("Kulaklık bağlıyken mikrofona dokun ve konuş.",12,MUTED,false);
-        voiceDescription.setGravity(Gravity.CENTER);voiceDescription.setPadding(0,dp(9),0,0);
-        voice.addView(voiceDescription);
+        TextView voiceSub=text("Sesli Görüşme",15,MUTED,false);
+        voiceSub.setGravity(Gravity.CENTER);
+        voiceSub.setPadding(0,dp(6),0,0);voice.addView(voiceSub);
         voiceOrb=new OrbView(this);voiceOrb.setAccent(agentColor,agentSecondary);
-        LinearLayout.LayoutParams vlp=lp(-1,dp(310));vlp.topMargin=dp(22);
-        voice.addView(voiceOrb,vlp);
-        TextView listening=text("◉  PANDORA HAZIR",12,0xFFD8C9FF,true);
-        listening.setGravity(Gravity.CENTER);voice.addView(listening);
-        TextView explain=text("Ses tanıma, telefonun Android hizmetini kullanır. Görüşmelerde ve arka planda çalışması cihaz izinlerine bağlıdır.",11,MUTED,false);
+        LinearLayout.LayoutParams vparams=lp(-1,dp(278));vparams.topMargin=dp(21);
+        voice.addView(voiceOrb,vparams);
+        voiceIndicator=text("Kulaklık bağlandığında hazır",13,0xFFE7DBFF,false);
+        voiceIndicator.setGravity(Gravity.CENTER);voice.addView(voiceIndicator);
+        TextView explain=text("Hey Pandora de. Etkinleştirme sesi yok; yanıtlar yalnızca kulaklıktan verilir.",12,MUTED,false);
         explain.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams exp=lp(-1,-2);exp.topMargin=dp(11);
-        voice.addView(explain,exp);
-        Button startVoice=roundButton("◉  Konuşmaya başla",0xFF784BEA);
-        startVoice.setTextSize(15);
-        LinearLayout.LayoutParams sv=lp(-1,dp(55));sv.topMargin=dp(27);
-        voice.addView(startVoice,sv);startVoice.setOnClickListener(v->listen());
-        TextView wake=text("Hey Pandora · Kulaklıkla uyandırmayı yönet",12,0xFFB6A8FF,false);
-        wake.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams wk=lp(-1,dp(50));voice.addView(wake,wk);
-        wake.setOnClickListener(v->toggleWakeMonitor());
-        screens[3]=voice;stage.addView(voice,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout.LayoutParams explp=lp(-1,-2);explp.topMargin=dp(15);
+        voice.addView(explain,explp);
+        Button voiceEnable=roundButton("◉  Sesli uyandırmayı yönet",0xFF7532D1);
+        voiceEnable.setTextSize(14);
+        LinearLayout.LayoutParams ve=lp(-1,dp(54));ve.topMargin=dp(23);
+        voice.addView(voiceEnable,ve);
+        voiceEnable.setOnClickListener(v->toggleWakeMonitor());
+        TextView closeVoice=tapChip("⌨  Yazışmaya geç",0xFFBAC1F7,()->switchPage(1));
+        LinearLayout.LayoutParams closeParams=lp(-1,dp(49));closeParams.topMargin=dp(10);
+        voice.addView(closeVoice,closeParams);
+        screens[5]=voice;stage.addView(voice,new FrameLayout.LayoutParams(-1,-1));
 
-        LinearLayout bottom=new LinearLayout(this);
-        bottom.setGravity(Gravity.CENTER);
-        bottom.setPadding(dp(3),dp(10),dp(3),dp(8));
-        bottom.setBackground(neonCard(0xFF101127,17,0xFF353258));
-        String[] names={"⌂\nAna sayfa","▤\nSohbet","◇\nAjanlar","◉\nSes"};
-        for(int i=0;i<names.length;i++){
-            final int tab=i;
-            TextView item=text(names[i],11,MUTED,false);
-            item.setGravity(Gravity.CENTER);
-            item.setPadding(dp(2),dp(6),dp(2),dp(6));
-            bottom.addView(item,new LinearLayout.LayoutParams(0,dp(53),1));
-            item.setOnClickListener(v->switchPage(tab));
-            tabs[i]=item;
+        LinearLayout nav=new LinearLayout(this);
+        nav.setGravity(Gravity.CENTER);nav.setPadding(dp(3),dp(6),dp(3),dp(6));
+        nav.setBackground(neonCard(0xFF101126,17,0xFF584079));
+        String[] labels={"⌂\nAna Sayfa","▤\nSohbet","◇\nAjanlar","▣\nProjeler","▦\nAraçlar"};
+        for(int i=0;i<labels.length;i++){
+            final int selected=i;
+            TextView tab=text(labels[i],10,MUTED,false);
+            tab.setGravity(Gravity.CENTER);
+            nav.addView(tab,new LinearLayout.LayoutParams(0,dp(52),1));
+            tab.setOnClickListener(v->switchPage(selected));
+            tabs[i]=tab;
         }
-        rootPage.addView(bottom);
+        rootPage.addView(nav,lp(-1,dp(66)));
         updateAgentBadge();
         switchPage(0);
+        refreshVoiceIndicator();
     }
 
+    private void showJevInfo(){
+        new AlertDialog.Builder(this).setTitle("Jev karar motoru")
+            .setMessage("Jev, sohbet yazan model değil; isteğe bağlı karar ve yönlendirme aracıdır. Bu sürümde bağlantısı doğrulanmış bir Jev anahtarı yok. Hermes sohbeti ve diğer çalışan modeller kullanılabilir. Jev bağlanmış gibi gösterilmeyecektir.")
+            .setPositiveButton("Tamam",null).show();
+    }
+
+    private void createProject(){
+        EditText title=new EditText(this);title.setSingleLine(true);
+        title.setHint("Yeni proje adı");
+        new AlertDialog.Builder(this).setTitle("Yeni proje")
+            .setView(title).setNegativeButton("Vazgeç",null)
+            .setPositiveButton("Ekle",(d,w)->{
+                String name=title.getText().toString().trim();
+                if(name.isEmpty()||name.length()>80)return;
+                try{
+                    org.json.JSONArray data=projectsData();
+                    if(data.length()>=30)return;
+                    data.put(new JSONObject().put("name",name).put("progress",0));
+                    prefs.edit().putString("pandora_projects_v22",data.toString()).apply();
+                    renderProjects();
+                }catch(Exception ignored){}
+            }).show();
+    }
+    private org.json.JSONArray projectsData(){
+        String raw=prefs.getString("pandora_projects_v22","");
+        if(raw.isEmpty()){
+            org.json.JSONArray examples=new org.json.JSONArray();
+            String[] titles={"E-Ticaret Projesi","Kripto Stratejisi",
+                "PANDORA Geliştirme","Yapay Zekâ Kitabı"};
+            for(String t:titles)examples.put(new JSONObject().put("name",t).put("progress",0));
+            prefs.edit().putString("pandora_projects_v22",examples.toString()).apply();
+            return examples;
+        }
+        try{return new org.json.JSONArray(raw);}
+        catch(Exception ignored){return new org.json.JSONArray();}
+    }
+    private void renderProjects(){
+        if(projectItems==null)return;
+        projectItems.removeAllViews();
+        org.json.JSONArray data=projectsData();
+        int[] colors={0xFFFFAC60,0xFF5EDD8B,0xFFB76AFF,0xFF33BDFF};
+        for(int i=0;i<data.length();i++){
+            JSONObject project=data.optJSONObject(i);if(project==null)continue;
+            final int index=i;
+            String name=project.optString("name","Proje");
+            int progress=Math.max(0,Math.min(100,project.optInt("progress",0)));
+            int accent=colors[i%colors.length];
+            LinearLayout card=new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(15),dp(12),dp(14),dp(13));
+            card.setBackground(neonCard(0xFF15152C,16,((accent&0x00FFFFFF)|0x66000000)));
+            LinearLayout nameRow=new LinearLayout(this);nameRow.setGravity(Gravity.CENTER_VERTICAL);
+            TextView label=text("◈  "+name,14,Color.WHITE,true);
+            nameRow.addView(label,new LinearLayout.LayoutParams(0,-2,1));
+            TextView amount=text("%"+progress,13,accent,true);nameRow.addView(amount);
+            card.addView(nameRow);
+            android.widget.ProgressBar bar=new android.widget.ProgressBar(this,null,
+                android.R.attr.progressBarStyleHorizontal);
+            bar.setMax(100);bar.setProgress(progress);
+            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));
+            bar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFF30334C));
+            LinearLayout.LayoutParams bp=lp(-1,dp(7));bp.topMargin=dp(11);
+            card.addView(bar,bp);
+            TextView hint=text("İlerlemeyi değiştirmek için dokun",11,MUTED,false);
+            hint.setPadding(0,dp(7),0,0);card.addView(hint);
+            LinearLayout.LayoutParams cp=lp(-1,-2);cp.bottomMargin=dp(12);
+            projectItems.addView(card,cp);
+            card.setOnClickListener(v->editProject(index));
+        }
+    }
+    private void editProject(int index){
+        org.json.JSONArray data=projectsData();
+        JSONObject obj=data.optJSONObject(index);if(obj==null)return;
+        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(17),0,dp(17),0);
+        TextView description=text("İlerleme: %"+obj.optInt("progress",0),14,Color.WHITE,false);
+        layout.addView(description);
+        android.widget.SeekBar slider=new android.widget.SeekBar(this);
+        slider.setMax(100);slider.setProgress(obj.optInt("progress",0));
+        slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
+            @Override public void onProgressChanged(android.widget.SeekBar bar,int value,boolean user){
+                description.setText("İlerleme: %"+value);
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar bar){}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar bar){}
+        });
+        layout.addView(slider);
+        new AlertDialog.Builder(this).setTitle(obj.optString("name","Proje"))
+            .setView(layout).setNegativeButton("Vazgeç",null)
+            .setNeutralButton("Projeyi sil",(d,w)->{
+                org.json.JSONArray remaining=new org.json.JSONArray();
+                for(int j=0;j<data.length();j++)if(j!=index)remaining.put(data.opt(j));
+                prefs.edit().putString("pandora_projects_v22",remaining.toString()).apply();
+                renderProjects();
+            })
+            .setPositiveButton("Kaydet",(d,w)->{
+                try{obj.put("progress",slider.getProgress());
+                    prefs.edit().putString("pandora_projects_v22",data.toString()).apply();
+                    renderProjects();
+                }catch(Exception ignored){}
+            }).show();
+    }
     private void applyAgentColors(String agent) {
         switch(agent) {
             case "Araştırma":agentColor=0xFF2ABFFF;agentSecondary=0xFF4A88FF;break;
@@ -461,6 +696,7 @@ public class MainActivity extends Activity {
         }
         if(orb!=null)orb.setAccent(agentColor,agentSecondary);
         if(voiceOrb!=null)voiceOrb.setAccent(agentColor,agentSecondary);
+        if(waveform!=null)waveform.setColors(agentColor,agentSecondary);
     }
     private void chooseAgent(String name,int color,int second){
         activeAgent=name;agentColor=color;agentSecondary=second;
@@ -470,13 +706,31 @@ public class MainActivity extends Activity {
         Toast.makeText(this,name+" ajanı seçildi",Toast.LENGTH_SHORT).show();
     }
     private void switchPage(int index) {
+        if(index<0||index>=screens.length)return;
         for(int i=0;i<screens.length;i++){
             if(screens[i]!=null)screens[i].setVisibility(index==i?View.VISIBLE:View.GONE);
-            if(tabs[i]!=null){
+            if(i<tabs.length && tabs[i]!=null){
                 tabs[i].setTextColor(index==i?Color.WHITE:MUTED);
                 tabs[i].setBackground(index==i?neonCard(0xFF29204A,13,agentColor):null);
             }
         }
+    }
+    private void refreshVoiceIndicator(){
+        if(listenIndicator==null && voiceIndicator==null)return;
+        boolean headset=PandoraAlerts.headsetConnected(this);
+        boolean granted=checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+            ==PackageManager.PERMISSION_GRANTED;
+        boolean active=WakeMonitorService.running && headset && !PandoraAlerts.inCall(this);
+        String message;
+        if(!granted)message="Mikrofon izni gerekiyor";
+        else if(!headset)message="Kulaklık bekleniyor · mikrofon kapalı";
+        else if(active)message="◉  Hey Pandora diyebilirsin";
+        else message="◯  Sesli uyandırma duraklatıldı";
+        if(listenIndicator!=null)listenIndicator.setText(message);
+        if(voiceIndicator!=null)voiceIndicator.setText(message);
+        if(waveform!=null)waveform.setListening(active);
+        if(orb!=null)orb.setActive(active);
+        if(voiceOrb!=null)voiceOrb.setActive(active);
     }
     private String agentPrompt(String prompt){
         if("Genel".equals(activeAgent))return prompt;
@@ -492,41 +746,8 @@ public class MainActivity extends Activity {
         return "Aktif uzman: "+activeAgent+". "+rule+"\n\nKullanıcının isteği:\n"+prompt;
     }
 
-    private void showNavigation() {
-        final String[] choices={
-            "✦  Hey Pandora • Kulaklıkla dinle",
-            "◷  Hatırlatıcı oluştur", "▣  Notlar", "＋  Not al",
-            "⌕  Ekranı yorumla", "◈  Ekran erişimi izni",
-            "◈  Hızlı erişim kutucuğu", "✧  Görüşmeyi görüntülüye aktar (deneme)",
-            "☼  Önemli bildirim denemesi", "▤  Sistem durumu",
-            "◉  Model seçimi", "◆  Hermes API anahtarı",
-            "⚙  Ses ve genel ayarlar", "☰  Komutlar",
-            "⇧  Notların yedeğini paylaş","◇  Ajan ve modüller"
-        };
-        new AlertDialog.Builder(this).setTitle("PANDORA · MENÜ")
-         .setItems(choices,(dialog,which)->{
-           switch(which) {
-             case 0: toggleWakeMonitor();break;
-             case 1: promptReminder(null);break;
-             case 2: showNotes();break;
-             case 3: promptNote();break;
-             case 4: showQuickTileSetup();break;
-             case 5: openScreenAccessibilitySettings();break;
-             case 6: showQuickTileSetup();break;
-             case 7: reply(PandoraAccessibilityService.requestWhatsAppVideoSwitch());break;
-             case 8: testImportantAlert();break;
-             case 9: showSystemReadiness();break;
-             case 10: chooseMode();break;
-             case 11: editHermesKey();break;
-             case 12: showSettings();break;
-             case 13: reply(help());break;
-             case 14: shareNotesBackup();break;
-             case 15: new AlertDialog.Builder(this).setTitle("PANDORA · Modüller")
-                  .setMessage(skillRegistry.describe()+"\n\nKritik işlemler açık kullanıcı onayı gerektirir. Kripto alım-satımı kapalıdır.")
-                  .setPositiveButton("Tamam",null).show();break;
-           }
-         }).setNegativeButton("Kapat",null).show();
-    }
+    /** No full-screen gray system menu: all features live in the neon Tools tab. */
+    private void showNavigation(){switchPage(4);}
     private Button roundButton(String text,int color) {
         Button b=new Button(this);b.setText(text);b.setTextColor(Color.WHITE);b.setTextSize(18);b.setAllCaps(false);
         b.setPadding(0,0,0,0);b.setBackground(background(color,15));return b;
