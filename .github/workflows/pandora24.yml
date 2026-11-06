@@ -1,0 +1,161 @@
+name: PANDORA 24 — Headset Wake Audio Regression
+on:
+  push:
+    branches: [pandora24-wake-audio-route]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+      - name: Download Vosk voice models and verify pinned hashes
+        run: python3 scripts/prepare_voice_model.py
+      - name: Pure-Java voice/policy regression tests
+        run: bash tests/RUN_TESTS.sh
+      - name: Acoustic wake diagnostic (noise and TTS)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends espeak-ng ffmpeg
+          python3 -m pip install --user vosk==0.3.45
+          python3 scripts/test_vosk_synth.py
+      - name: Assemble installable Android APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Validate the Android APK
+        run: |
+          set -e
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | head -4
+      - name: Upload PANDORA 24 test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA24-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Optional stable signing setup
+        id: sign
+        env:
+          KEY_B64: ${{ secrets.PANDORA_KEYSTORE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEY_B64" || -z "$KEY_PASSWORD" ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No stable signing credentials configured; debug build remains available"
+            exit 0
+          fi
+          umask 077
+          echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/pandora.p12"
+          test -s "$RUNNER_TEMP/pandora.p12"
+          echo "PANDORA_KEYSTORE_PATH=$RUNNER_TEMP/pandora.p12" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+      - name: Assemble signed stable release when configured
+        if: steps.sign.outputs.available == 'true'
+        env:
+          PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          gradle --no-daemon :app:assembleRelease
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            app/build/outputs/apk/release/app-release.apk
+      - name: Upload stable APK for in-place updates
+        if: steps.sign.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA24-STABLE-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Erase temporary keystore
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "$PANDORA_KEYSTORE_PATH" ]]; then rm -f -- "$PANDORA_KEYSTORE_PATH"; fi
+
+  android13-smoke:
+    needs: apk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: PANDORA24-APK
+          path: pandora24-app
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+      - name: Android 13 emulator launch test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disk-size: 2048M
+          ram-size: 2048M
+          disable-animations: true
+          script: bash scripts/emulator_smoke.sh
+      - name: Archive Android 13 UI screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA24-Android13-Screen
+          path: pandora24-android13.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  private-prerelease:
+    needs: [apk]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/pandora24-wake-audio-route'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: PANDORA24-STABLE-APK
+          path: signed-apk
+      - name: Publish private beta APK (real direct download, no ZIP)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp signed-apk/app-release.apk PANDORA24.apk
+          if gh release view "v2.4.0-rc1" >/dev/null 2>&1; then
+            gh release upload "v2.4.0-rc1" PANDORA24.apk --clobber
+          else
+            gh release create "v2.4.0-rc1" PANDORA24.apk \
+              --target "$GITHUB_SHA" \
+              --title "PANDORA 24 · Sessiz Hey Pandora" \
+              --notes "Android 13 kulaklık mikrofonu yönlendirmesi, çevrimdışı Hey Pandora, aynı neon tema. Bluetooth donanımı gerçek kullanıcı cihazında ayrıca test edilmelidir. Önce eski PANDORA 22/23 ses hizmetlerini durdur." \
+              --prerelease
+          fi

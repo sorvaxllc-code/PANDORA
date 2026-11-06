@@ -33,7 +33,8 @@ public final class HttpAiProvider implements AiProvider {
  public String answer(JSONArray messages,CancelToken cancellation) throws Exception {
    cancellation.ensureActive();
    if(!endpoint.equals("http://127.0.0.1:8080/v1/chat/completions") &&
-      !endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL))throw new SecurityException("Unsupported endpoint");
+      !endpoint.equals(FreeCloudPolicy.COMPLETIONS_URL) &&
+      !endpoint.equals("http://127.0.0.1:8642/v1/chat/completions"))throw new SecurityException("Unsupported endpoint");
    HttpURLConnection con=(HttpURLConnection)new URL(endpoint).openConnection();
    cancellation.attach(con);
    try {
@@ -48,8 +49,9 @@ public final class HttpAiProvider implements AiProvider {
      // llama.cpp may be started without --alias, in which case discover its actual loaded model id.
      if(endpoint.startsWith("http://127.0.0.1:")){
        try {
-         HttpURLConnection models=(HttpURLConnection)new URL("http://127.0.0.1:8080/v1/models").openConnection();
+         HttpURLConnection models=(HttpURLConnection)new URL(endpoint.startsWith("http://127.0.0.1:8642/")?"http://127.0.0.1:8642/v1/models":"http://127.0.0.1:8080/v1/models").openConnection();
          models.setConnectTimeout(4000);models.setReadTimeout(4000);
+         if(endpoint.startsWith("http://127.0.0.1:8642/"))models.setRequestProperty("Authorization","Bearer "+token);
          try(InputStream is=models.getInputStream();BufferedReader rd=new BufferedReader(new InputStreamReader(is,StandardCharsets.UTF_8))){
            StringBuilder b=new StringBuilder();String line;
            while((line=rd.readLine())!=null)b.append(line);
@@ -59,8 +61,8 @@ public final class HttpAiProvider implements AiProvider {
      }
      cancellation.ensureActive();
      JSONObject payload=new JSONObject().put("model",resolvedModel).put("messages",messages)
-       .put("stream",false).put("temperature",0.5)
-       .put("max_tokens",endpoint.startsWith("http://127.0.0.1:")?64:768);
+       .put("stream",false)
+       .put("max_tokens",endpoint.equals("http://127.0.0.1:8080/v1/chat/completions")?128:1024);
      byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);
      try(OutputStream out=con.getOutputStream()){out.write(bytes);}
      int status=con.getResponseCode();
