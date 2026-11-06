@@ -7,6 +7,8 @@ import com.jarvis.kisisel.ai.ModelAction;
 import com.jarvis.kisisel.ai.LocalModelHealth;
 import com.jarvis.kisisel.ai.HttpAiProvider;
 import com.jarvis.kisisel.ai.SecretVault;
+import com.jarvis.kisisel.ai.GroqVault;
+import com.jarvis.kisisel.ai.HybridRoutePolicy;
 import com.jarvis.kisisel.ai.CloudKeyCheck;
 import android.app.Activity;
 import android.app.DatePickerDialog;
@@ -307,24 +309,32 @@ public class MainActivity extends Activity {
         top.addView(bell,lp(dp(48),dp(49)));
         rootPage.addView(top,lp(-1,dp(63)));
 
+        // Existing neon layout, but with real connected model choices.
         LinearLayout modeRow=new LinearLayout(this);
         modeRow.setPadding(0,dp(8),0,dp(7));
-        TextView jev=tapChip("♧  JEV",0xFFBA82FF,()->showJevInfo());
-        TextView hermes=tapChip("◇  HERMES",0xFF39B9FF,()->{
-            modelRouter.setMode("HERMES");
-            showStatus("HAZIR · HERMES");
-            Toast.makeText(this,"Hermes seçildi",Toast.LENGTH_SHORT).show();
+        TextView fast=tapChip("⚡  GROQ",0xFFB682FF,()->{
+            if(!GroqVault.exists(this)||!prefs.getBoolean("pandora_groq_notice_v25",false)){
+                editGroqKey();return;
+            }
+            setModeAndRefresh("GROQ","Groq hızlı sohbet");
         });
-        TextView auto=tapChip("∞  AUTO",0xFFBA82FF,()->{
-            modelRouter.setMode("AUTO");
-            showStatus("HAZIR · OTOMATİK");
-            Toast.makeText(this,"OpenRouter / yerel otomatik mod seçildi",Toast.LENGTH_LONG).show();
+        TextView hermes=tapChip("◇  HERMES",0xFF39B9FF,()->{
+            if(!com.jarvis.kisisel.ai.HermesVault.exists(this)){
+                editHermesKey();return;
+            }
+            setModeAndRefresh("HERMES","Hermes görev ajanı");
+        });
+        TextView hybrid=tapChip("∞  HİBRİT",0xFFC5A5FF,()->{
+            if(!GroqVault.exists(this)||!prefs.getBoolean("pandora_groq_notice_v25",false)){
+                editGroqKey();return;
+            }
+            setModeAndRefresh("HYBRID","Groq hızlı sohbet + Hermes");
         });
         LinearLayout.LayoutParams m1=new LinearLayout.LayoutParams(0,dp(43),1);m1.rightMargin=dp(6);
-        modeRow.addView(jev,m1);
+        modeRow.addView(fast,m1);
         LinearLayout.LayoutParams m2=new LinearLayout.LayoutParams(0,dp(43),1);m2.rightMargin=dp(6);
         modeRow.addView(hermes,m2);
-        modeRow.addView(auto,new LinearLayout.LayoutParams(0,dp(43),1));
+        modeRow.addView(hybrid,new LinearLayout.LayoutParams(0,dp(43),1));
         rootPage.addView(modeRow,lp(-1,dp(60)));
 
         LinearLayout statusRow=new LinearLayout(this);
@@ -519,10 +529,21 @@ public class MainActivity extends Activity {
             0xFFFFC174,()->showLegacyPandoras());
         addToolsCard(toolBody,"Ses & konuşma ayarları",
             "Türkçe ses, ton, hız ve sesli yanıt",0xFF4DB6FF,()->showSettings());
+        addToolsCard(toolBody,"Groq · Hızlı sohbet",
+            "GPT-OSS 20B · doğrudan bağlantı, Hermes beklemesi yok",
+            0xFFB783FF,()->editGroqKey());
+        addToolsCard(toolBody,"Groq + Hermes · Hibrit mod",
+            "Sohbet Groq, açıkça istenen ajan görevi Hermes",
+            0xFF45BEFF,()->{
+                if(!GroqVault.exists(this)||!prefs.getBoolean("pandora_groq_notice_v25",false)){
+                    editGroqKey();return;
+                }
+                setModeAndRefresh("HYBRID","Groq + Hermes");
+            });
         addToolsCard(toolBody,"Hermes bağlantısı",
             "API anahtarını düzenle • Termux:8642",0xFFBA7DFF,()->editHermesKey());
         addToolsCard(toolBody,"Yapay zekâ modeli",
-            "Hermes, OpenRouter veya yerel model",0xFF76B1FF,()->chooseMode());
+            "Groq, Hibrit, Hermes, OpenRouter veya yerel model",0xFF76B1FF,()->chooseMode());
         addToolsCard(toolBody,"Notlar ve hafıza",
             "Not ekle, görüntüle ve yedekle",0xFF46DFCE,()->showNotes());
         addToolsCard(toolBody,"Hatırlatıcılar",
@@ -1112,6 +1133,48 @@ public class MainActivity extends Activity {
         voiceHandler.removeCallbacks(voiceTicker);
         super.onPause();
     }
+    private void editGroqKey(){
+        EditText key=new EditText(this);
+        key.setSingleLine(true);
+        key.setHint("gsk_... (Groq API anahtarın)");
+        key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        key.setPadding(dp(18),dp(12),dp(18),dp(12));
+        boolean saved=GroqVault.exists(this);
+        new AlertDialog.Builder(this).setTitle("⚡ GROQ · Hızlı sohbet")
+            .setMessage("Model: openai/gpt-oss-20b\n" +
+                "API: https://api.groq.com\n\n" +
+                "Ücretsiz hesapta kota sınırlıdır. Bir ücretli plan açarsan sağlayıcının ücretlendirmesi geçerli olabilir.\n\n" +
+                "Anahtarın: "+(saved?"kayıtlı":"henüz yok")+
+                "\n\nAnahtar Android Keystore içinde şifrelenir. Bana gönderme.")
+            .setView(key)
+            .setNeutralButton("Ücretsiz anahtar al",(d,w)->openUrl("https://console.groq.com/keys"))
+            .setNegativeButton("Kapat",null)
+            .setPositiveButton("Kaydet",(d,w)->{
+                String value=key.getText().toString().trim();
+                if(value.length()<25 || !value.startsWith("gsk_") ||
+                    value.contains(" ") || value.contains("\n")){
+                    Toast.makeText(this,"Geçerli Groq API anahtarını gir.",
+                        Toast.LENGTH_LONG).show();return;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("Groq bulut gizlilik onayı")
+                    .setMessage("PANDORA'nın normal sohbet metni Groq'a gönderilir. " +
+                        "Kayıtlı notların ve önceki sohbetlerin varsayılan olarak gönderilmez. " +
+                        "Groq ücretsiz kotası sınırlıdır. " +
+                        "Groq API'si kullanılır; Hermes API anahtarı değişmez. Kabul ediyor musun?")
+                    .setNegativeButton("İptal",null)
+                    .setPositiveButton("Kabul et",(dd,ww)->{
+                        if(!GroqVault.put(this,value)){
+                            Toast.makeText(this,"Groq anahtarı şifrelenemedi.",
+                                Toast.LENGTH_LONG).show();return;
+                        }
+                        prefs.edit().putBoolean("pandora_groq_notice_v25",true).apply();
+                        setModeAndRefresh("HYBRID","Groq hızlı sohbet + Hermes");
+                        Toast.makeText(this,"Groq kaydedildi. Normal sohbet artık Groq üzerinden.",
+                            Toast.LENGTH_LONG).show();
+                    }).show();
+            }).show();
+    }
     private void editHermesKey(){
         EditText key=new EditText(this);
         key.setSingleLine(true);key.setHint("Hermes API_SERVER_KEY");
@@ -1195,6 +1258,7 @@ public class MainActivity extends Activity {
             "Gizlilik ve sınırlamalar",
             "Ekran metnini buluta gönder: " + (prefs.getBoolean("pandora_screen_cloud_optin",false)?"AÇIK":"KAPALI"),
             "Hermes API anahtarı / bağlantısı",
+            "Groq hızlı sohbet / API anahtarı",
             "Türkçe ses seç / erkek sesi varsa seç",
             "Ses tonu: "+prefs.getFloat("pandora_voice_pitch",0.85f)+" (kulaklıkla)"
         };
@@ -1220,6 +1284,7 @@ public class MainActivity extends Activity {
                     }).show();break;
                 case 11:toggleScreenCloudConsent();break;
                 case 12:editHermesKey();break;
+                case 15:editGroqKey();break;
                 case 13:chooseVoice();break;
                 case 14:
                     final String[] tones={"Daha tok (0.75)","Tok / doğal (0.85)","Normal (1.00)"};
@@ -1254,31 +1319,49 @@ public class MainActivity extends Activity {
     }
 
     private void chooseMode() {
-        String[] labels={"Hermes Agent (Termux:8642)", "Yalnızca hazır komutlar", "Yerel (Termux:8080)", "Bulut (OpenRouter ücretsiz)", "Otomatik (önce bulut, sonra yerel)"};
-        String[] values={"HERMES","OFF","LOCAL","CLOUD","AUTO"};
-        new AlertDialog.Builder(this).setTitle("Çalışma modu")
-            .setSingleChoiceItems(labels,java.util.Arrays.asList(values).indexOf(modelRouter.mode()),(d,which)->{
+        String[] labels={
+            "⚡ Groq hızlı sohbet (GPT-OSS 20B)",
+            "∞ Groq + Hermes hibrit (önerilen)",
+            "◇ Hermes Agent (Termux:8642)",
+            "Yalnızca hazır komutlar",
+            "Yerel model (Termux:8080)",
+            "OpenRouter ücretsiz bulut",
+            "OpenRouter/yerel otomatik"
+        };
+        String[] values={"GROQ","HYBRID","HERMES","OFF","LOCAL","CLOUD","AUTO"};
+        new AlertDialog.Builder(this).setTitle("PANDORA · Yapay zekâ modu")
+            .setSingleChoiceItems(labels,
+                java.util.Arrays.asList(values).indexOf(modelRouter.mode()),(d,which)->{
                 d.dismiss();
                 String chosen=values[which];
-                if("HERMES".equals(chosen)&&!com.jarvis.kisisel.ai.HermesVault.exists(this)){
+                if(("GROQ".equals(chosen)||"HYBRID".equals(chosen)) &&
+                    (!GroqVault.exists(this) ||
+                     !prefs.getBoolean("pandora_groq_notice_v25",false))){
+                    editGroqKey();return;
+                }
+                if("HERMES".equals(chosen)&&
+                    !com.jarvis.kisisel.ai.HermesVault.exists(this)){
                     editHermesKey();return;
                 }
                 if(("CLOUD".equals(chosen)||"AUTO".equals(chosen)) && !SecretVault.exists(this)){
-                    new AlertDialog.Builder(this).setTitle("Önce ücretsiz bulut anahtarını ekle")
-                        .setMessage("Bulut seçeneği için ücretsiz bir OpenRouter hesabı ve API anahtarı gerekiyor. Anahtarı buradaki sohbetimize gönderme. PANDORA Ayarlar içinde saklayacağız. Ücretli model çağrıları kapalıdır.")
-                        .setNegativeButton("İptal",null).setNeutralButton("Anahtar oluştur",(dd,w)->openUrl("https://openrouter.ai/settings/keys"))
+                    new AlertDialog.Builder(this)
+                        .setTitle("OpenRouter anahtarı gerekiyor")
+                        .setMessage("Ücretsiz OpenRouter modeli için ayrı bir API anahtarı gerekir.")
+                        .setNegativeButton("İptal",null)
+                        .setNeutralButton("Anahtar oluştur",(dd,w)->openUrl("https://openrouter.ai/settings/keys"))
                         .setPositiveButton("Anahtar gir",(dd,w)->editApiKey()).show();
                     return;
                 }
-                if(("CLOUD".equals(chosen)||"AUTO".equals(chosen)) && !prefs.getBoolean("pandora_cloud_notice_v8",false)){
-                    new AlertDialog.Builder(this).setTitle("Bulut gizlilik onayı")
-                        .setMessage("Bu modu seçersen sohbet mesajların OpenRouter üzerinden başka bir yapay zekâ sağlayıcısına gönderilir. Notlar ve geçmiş varsayılan olarak paylaşılmaz. Yalnızca ücretsiz model kullanılır; ücretsiz istek kotası sınırlıdır. Devam edilsin mi?")
+                if(("CLOUD".equals(chosen)||"AUTO".equals(chosen)) &&
+                    !prefs.getBoolean("pandora_cloud_notice_v8",false)){
+                    new AlertDialog.Builder(this).setTitle("OpenRouter gizlilik onayı")
+                        .setMessage("Sohbet metinleri OpenRouter üzerinden gönderilir. Notlar ve geçmiş varsayılan paylaşılmaz.")
                         .setNegativeButton("Vazgeç",null)
                         .setPositiveButton("Kabul et",(dd,w)->{
                             prefs.edit().putBoolean("pandora_cloud_notice_v8",true).apply();
                             setModeAndRefresh(chosen,labels[which]);
                         }).show();
-                }else setModeAndRefresh(chosen,labels[which]);
+                } else setModeAndRefresh(chosen,labels[which]);
             }).setNegativeButton("İptal",null).show();
     }
     private void setModeAndRefresh(String value, String label){
@@ -1381,20 +1464,27 @@ public class MainActivity extends Activity {
         final int generation=++requestGeneration;
         if(stopButton!=null)stopButton.setVisibility(View.VISIBLE);
         showStatus("YANIT BEKLENİYOR · "+modelRouter.modeLabel());
-        activeRequest=modelRouter.askAsync(agentPrompt(prompt), (answer,source)->runOnUiThread(()->{
+        boolean explicitHermes=HybridRoutePolicy.isExplicitHermesRequest(prompt)
+            && "HYBRID".equals(modelRouter.mode());
+        String message=explicitHermes?HybridRoutePolicy.stripHermesPrefix(prompt):prompt;
+        ModelRouter.Callback callback=(answer,source)->runOnUiThread(()->{
             if(generation!=requestGeneration || isFinishing() || isDestroyed())return;
             modelBusy=false;
             activeRequest=null;
             if(stopButton!=null)stopButton.setVisibility(View.GONE);
             showStatus("HAZIR · "+modelRouter.modeLabel());
-            if(!applyModelAction(answer)) {
+            // Fast chat cannot issue device commands, even if a model
+            // returns a specially formatted JSON instruction.
+            boolean fromGroq=source!=null && source.startsWith("Groq");
+            if(fromGroq || !applyModelAction(answer)) {
                 reply(answer);
-                // Attribution is shown only after an actual model reply, never after a canned command.
-                if(source!=null && !source.isEmpty()){
-                    addBubble(false,"Yanıt kaynağı: "+source, false);
-                }
+                if(source!=null && !source.isEmpty())
+                    addBubble(false,"Yanıt kaynağı: "+source,false);
             }
-        }));
+        });
+        activeRequest=explicitHermes
+            ? modelRouter.askHermesAsync(agentPrompt(message),callback)
+            : modelRouter.askAsync(agentPrompt(message),callback);
     }
 
     private void showSystemReadiness() {
