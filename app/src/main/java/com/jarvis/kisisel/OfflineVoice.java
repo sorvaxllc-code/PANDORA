@@ -294,6 +294,10 @@ public final class OfflineVoice implements AutoCloseable {
         if(closed)return;
         muted=true;
         closed=true;
+        AudioRecord current=recorder;
+        if(current!=null && current.getRecordingState()==AudioRecord.RECORDSTATE_RECORDING){
+            try{current.stop();}catch(RuntimeException ignored){}
+        }
         Thread thread=worker;
         if(thread!=null)thread.interrupt();
         else{
