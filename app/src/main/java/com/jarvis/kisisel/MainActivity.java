@@ -106,6 +106,7 @@ public class MainActivity extends Activity {
     private boolean voiceEnabled;
     private String queuedReminder;
     private ModelRouter modelRouter;
+    private com.jarvis.kisisel.core.CaptainTeam captainTeam;
     private AgentRegistry skillRegistry;
     private volatile boolean modelBusy = false;
     private Button stopButton;
@@ -120,6 +121,7 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("jarvis_settings", MODE_PRIVATE);
         voiceEnabled = prefs.getBoolean("voice", true);
         modelRouter = new ModelRouter(this, memory);
+        captainTeam = new com.jarvis.kisisel.core.CaptainTeam(this);
         // Existing users retain the previous local-model preference.
         if (!prefs.contains("pandora_mode") && prefs.getBoolean("local_model", false)) {
             prefs.edit().putString("pandora_mode", "LOCAL").apply();
@@ -459,6 +461,12 @@ public class MainActivity extends Activity {
         agentsBody.addView(text("Ajanlar",22,Color.WHITE,true));
         TextView agentDesc=text("Uzman yapay zekâ ekiplerin",11,MUTED,false);
         agentDesc.setPadding(0,dp(6),0,dp(12));agentsBody.addView(agentDesc);
+        addToolsCard(agentsBody,"PANDORA · Genel Müdür",
+            "2 uzman görüşü, gerçek görev takibi ve müdür raporu",
+            0xFFB985FF,()->showCaptainPanel());
+        addToolsCard(agentsBody,"Müdürün önceki raporları",
+            "Tamamlanan analizler ve sorumlu uzmanlar",
+            0xFF3DBBFF,()->showCaptainHistory());
         addToolsCard(agentsBody,"Jev · Karar & Strateji",
             "Harici Jev karar modeli · bağlantı isteğe bağlı",0xFFD36CFF,()->showJevInfo());
         addToolsCard(agentsBody,"Hermes · Görev Yürütücü",
@@ -510,6 +518,10 @@ public class MainActivity extends Activity {
         toolBody.addView(text("Araçlar & Ayarlar",22,Color.WHITE,true));
         TextView toolsHint=text("Pandora'nın yetenekleri ve cihaz izinleri",11,MUTED,false);
         toolsHint.setPadding(0,dp(7),0,dp(13));toolBody.addView(toolsHint);
+        addToolsCard(toolBody,"PANDORA Genel Müdür · Ekibe görev ver",
+            "Uzman model çağrıları ve rapor",0xFFC285FF,()->showCaptainPanel());
+        addToolsCard(toolBody,"Ekip raporları",
+            "Önceden tamamlanmış görevler",0xFF4EC9FF,()->showCaptainHistory());
         addToolsCard(toolBody,"Hey Pandora · Sessiz uyandırma",
             "Gerçek kulaklık mikrofonuyla yerel algılama",0xFFA76DFF,()->toggleWakeMonitor());
         addToolsCard(toolBody,"Ses & mikrofon kontrolü",
@@ -920,6 +932,12 @@ public class MainActivity extends Activity {
         if(!withoutWake.equals(command)){
             command=withoutWake.trim();
             q=command.toLowerCase(new Locale("tr","TR"));
+        }
+        if(q.startsWith("ekibe ") || q.startsWith("müdür ") ||
+            q.startsWith("müdüre ") || q.startsWith("ekip ") ||
+            q.startsWith("ekibime ")) {
+            String goal=q.replaceFirst("^(?:ekibe|müdür|müdüre|ekip|ekibime)\\s+","").trim();
+            if(goal.length()>3){startCaptainTask(goal);return;}
         }
         if(skillRegistry.tryHandle(this,q,this::reply)) return;
         if (q.contains("ekrana bak") || q.contains("ekranı analiz") ||
@@ -1532,6 +1550,103 @@ public class MainActivity extends Activity {
             : modelRouter.askAsync(agentPrompt(message),callback);
     }
 
+
+    private void showCaptainPanel(){
+        EditText goal=new EditText(this);
+        goal.setHint("Örneğin: Shopify mağazam için rakip analizi ve satış planı hazırla");
+        goal.setMinLines(2);
+        goal.setMaxLines(5);
+        goal.setPadding(dp(16),dp(13),dp(16),dp(13));
+        new AlertDialog.Builder(this)
+            .setTitle("PANDORA · Genel Müdür")
+            .setMessage("Sen görevi belirlersin; PANDORA iki uzmanı görevlendirir, gerçek model yanıtlarını toplar ve raporlar. Gerçek hesap işlemleri için ayrıca erişim gerekir. Bu işlem ücretsiz API kotandan üç model isteği kullanabilir.")
+            .setView(goal)
+            .setNegativeButton("Vazgeç",null)
+            .setNeutralButton("Eski raporlar",(d,w)->showCaptainHistory())
+            .setPositiveButton("Ekibi çalıştır",(d,w)->startCaptainTask(goal.getText().toString()))
+            .show();
+    }
+    private void startCaptainTask(String objective){
+        String goal=objective==null?"":objective.trim();
+        if(goal.length()<5){
+            Toast.makeText(this,"Müdüre somut bir görev söyle.",Toast.LENGTH_LONG).show();
+            return;
+        }
+        if(captainTeam==null)captainTeam=new com.jarvis.kisisel.core.CaptainTeam(this);
+        if(captainTeam.busy()){
+            new AlertDialog.Builder(this).setTitle("Ekip çalışıyor")
+                .setMessage("Mevcut ekip görevini tamamlayana kadar yeni görev başlatılamaz.")
+                .setNegativeButton("Kapat",null)
+                .setPositiveButton("Mevcut görevi durdur",(d,w)->{
+                    captainTeam.cancel();
+                    showStatus("HAZIR · "+modelRouter.modeLabel());
+                    addBubble(false,"Ekip çalışması kullanıcı isteğiyle iptal edildi.",false);
+                }).show();
+            return;
+        }
+        switchPage(1);
+        addBubble(true,"Müdüre görev: "+goal,true);
+        showStatus("PANDORA · EKİP ÇALIŞIYOR");
+        captainTeam.start(goal,new com.jarvis.kisisel.core.CaptainTeam.Listener(){
+            @Override public void progress(String label,String detail,int step){
+                if(isFinishing()||isDestroyed())return;
+                showStatus("PANDORA · "+label);
+                addBubble(false,(step==0?"Görev dağıtıldı":step==3?"Müdür değerlendiriyor":"Uzman görevi")
+                    +" · "+label+"\n"+detail,false);
+            }
+            @Override public void complete(String task,String answer){
+                if(isFinishing()||isDestroyed())return;
+                showStatus("HAZIR · "+modelRouter.modeLabel());
+                addBubble(false,"PANDORA · MÜDÜR RAPORU\n\n"+answer,true);
+                String spoken="Müdür raporu hazır. "+(answer.length()>260?
+                    answer.substring(0,260)+" ... Ayrıntılar PANDORA raporunda.":answer);
+                PandoraAlerts.postImportant(MainActivity.this,
+                    "PANDORA · Ekip görevi tamamlandı",
+                    "Görev: "+(task.length()>105?task.substring(0,105):task)
+                    +" · Müdür raporu uygulamada hazır.");
+                PandoraHeadphoneReply.say(getApplicationContext(),spoken);
+            }
+            @Override public void failed(String reason){
+                if(isFinishing()||isDestroyed())return;
+                showStatus("HAZIR · "+modelRouter.modeLabel());
+                addBubble(false,"Ekip görevi tamamlanamadı: "+reason,true);
+                PandoraAlerts.postImportant(MainActivity.this,"PANDORA · Ekip hatası",reason);
+                PandoraHeadphoneReply.say(getApplicationContext(),
+                    "Ekip görevi tamamlanamadı. Ayrıntı için PANDORA'ya bak.");
+            }
+        });
+    }
+    private void showCaptainHistory(){
+        if(captainTeam==null)captainTeam=new com.jarvis.kisisel.core.CaptainTeam(this);
+        JSONArray history=captainTeam.history();
+        if(history.length()==0){
+            new AlertDialog.Builder(this).setTitle("PANDORA · Ekip raporları")
+                .setMessage("Henüz tamamlanmış bir ekip raporu yok.")
+                .setPositiveButton("Tamam",null).show();return;
+        }
+        String[] titles=new String[history.length()];
+        for(int i=0;i<history.length();i++){
+            JSONObject report=history.optJSONObject(i);
+            if(report==null){titles[i]="Bilinmeyen görev";continue;}
+            String goal=report.optString("goal","Görev");
+            titles[i]=(goal.length()>62?goal.substring(0,62)+"…":goal)
+                +" · "+report.optString("experts","Uzmanlar");
+        }
+        new AlertDialog.Builder(this).setTitle("PANDORA · Tamamlanan raporlar")
+            .setItems(titles,(d,which)->{
+                JSONObject data=history.optJSONObject(which);
+                if(data==null)return;
+                new AlertDialog.Builder(this)
+                    .setTitle(data.optString("goal","Müdür raporu"))
+                    .setMessage(data.optString("captain","Rapor bulunamadı"))
+                    .setPositiveButton("Tamam",null)
+                    .setNeutralButton("Sohbete ekle",(dd,ww)->{
+                        switchPage(1);
+                        addBubble(false,data.optString("captain",""),false);
+                    }).show();
+            }).setNegativeButton("Kapat",null).show();
+    }
+
     private void showSystemReadiness() {
         boolean screen=PandoraAccessibilityService.isConnected();
         boolean display=OverlayPulse.permitted(this);
@@ -1784,6 +1899,7 @@ public class MainActivity extends Activity {
         audioGuard.removeCallbacks(guardAudio);
         voiceHandler.removeCallbacksAndMessages(null);
         if(speech!=null){speech.stop();speech.shutdown();}
+        if(captainTeam!=null)captainTeam.close();
         if(memory!=null)memory.close();
         super.onDestroy();
     }
