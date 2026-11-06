@@ -141,7 +141,12 @@ public class MainActivity extends Activity {
         if(!prefs.contains("pandora_mode")) modelRouter.setMode("HERMES");
         buildUi();
         enableHeadsetAudioGuard();
-        getWindow().getDecorView().post(this::prepareAutoWake);
+        if(!prefs.getBoolean("pandora_setup_v26_seen",false)) {
+            prefs.edit().putBoolean("pandora_setup_v26_seen",true).apply();
+            getWindow().getDecorView().postDelayed(this::showPermissionsWizard,1300);
+        } else {
+            getWindow().getDecorView().post(this::prepareAutoWake);
+        }
 
         List<String[]> history = memory.messages();
         if(history.isEmpty()) addBubble(false, "Merhaba! Ben PANDORA. Sesli konuşmak için mikrofonu kullanabilir veya aşağıdaki komutlardan başlayabilirsin. Komutlar ücretsiz ve yerel çalışır.", false);
@@ -563,6 +568,9 @@ public class MainActivity extends Activity {
             "Not ekle, görüntüle ve yedekle",0xFF46DFCE,()->showNotes());
         addToolsCard(toolBody,"Hatırlatıcılar",
             "Bildirimleri planla ve takip et",0xFF9B7EFF,()->showReminders());
+        addToolsCard(toolBody,"İlk kurulum & telefon izinleri",
+            "Ekran, mikrofon, Bluetooth, bildirim, arama ve kişiler",
+            0xFFB49CFF,()->showPermissionsWizard());
         addToolsCard(toolBody,"Ekran analizi",
             "Hızlı Ayarlar ve izinli ekran okuma",0xFF50BFFF,()->showQuickTileSetup());
         addToolsCard(toolBody,"Telefon yetkileri",
@@ -1689,6 +1697,72 @@ public class MainActivity extends Activity {
             }).show();
     }
 
+    /** Explicit, inspectable first-launch wizard: permissions never self-grant. */
+    private void showPermissionsWizard(){
+        boolean mic=wakePermissionsReady();
+        boolean accessibility=PandoraAccessibilityService.isConnected();
+        boolean notif=PandoraAlerts.canNotify(this);
+        boolean calls=checkSelfPermission(Manifest.permission.CALL_PHONE)
+            ==PackageManager.PERMISSION_GRANTED;
+        boolean contacts=checkSelfPermission(Manifest.permission.READ_CONTACTS)
+            ==PackageManager.PERMISSION_GRANTED;
+        boolean overlay=OverlayPulse.permitted(this);
+        boolean screenCloud=prefs.getBoolean("pandora_screen_cloud_optin",false);
+        final String[] tasks={
+            "1 · Mikrofon + kulaklık · "+(mic?"İZİNLİ":"İZİN GEREKİYOR"),
+            "2 · Ekran erişimi / OCR · "+(accessibility?"ETKİN":"KAPALI"),
+            "3 · PANDORA ışık halkası · "+(overlay?"ETKİN":"KAPALI"),
+            "4 · Bildirimler · "+(notif?"İZİNLİ":"İZİN GEREKİYOR"),
+            "5 · Telefonla arama · "+(calls?"İZİNLİ":"İZİN GEREKİYOR"),
+            "6 · Kişiler / isimle arama · "+(contacts?"İZİNLİ":"İZİN GEREKİYOR"),
+            "7 · Ekran metnini AI'a gönder · "+(screenCloud?"ONAYLI":"KAPALI"),
+            "8 · Android Hızlı Ayarlar ekran kısayolu",
+            "9 · İzinler ve bağlantılar raporu"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("PANDORA · Kurulum Merkezi")
+            .setMessage("İzinleri sen bir kez verirsin; PANDORA bunları kendiliğinden açamaz. Erişilebilirlik, korumalı ekranlar ve arama ayrı Android onaylarına tabidir. Her izni gerekirse sonradan kapatabilirsin.")
+            .setItems(tasks,(d,which)->{
+                switch(which){
+                    case 0:requestWakePermissions(false);break;
+                    case 1:openScreenAccessibilitySettings();break;
+                    case 2:showOrAuthorizeOverlay();break;
+                    case 3:
+                        if(Build.VERSION.SDK_INT>=33 &&
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                                !=PackageManager.PERMISSION_GRANTED)
+                            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIF_REQUEST);
+                        else Toast.makeText(this,"Bildirim izni zaten verilmiş.",Toast.LENGTH_SHORT).show();
+                        break;
+                    case 4:requestPhonePermission();break;
+                    case 5:
+                        if(checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                                !=PackageManager.PERMISSION_GRANTED)
+                            requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},46);
+                        else Toast.makeText(this,"Kişiler erişimi zaten verilmiş.",Toast.LENGTH_SHORT).show();
+                        break;
+                    case 6:toggleScreenCloudConsent();break;
+                    case 7:showQuickTileSetup();break;
+                    default:showSystemReadiness();break;
+                }
+            })
+            .setNegativeButton("Kapat",null)
+            .setPositiveButton("Dinleme ve ses testi",(d,w)->{
+                prepareAutoWake();showVoiceDiagnostics();
+            }).show();
+    }
+    private void requestPhonePermission(){
+        if(checkSelfPermission(Manifest.permission.CALL_PHONE)
+            ==PackageManager.PERMISSION_GRANTED){
+            Toast.makeText(this,"Telefon izni zaten verilmiş.",Toast.LENGTH_SHORT).show();return;
+        }
+        new AlertDialog.Builder(this).setTitle("Telefonla arama yetkisi")
+            .setMessage("Bu izin yalnızca senin açıkça istediğin aramaların başlatılması içindir. PANDORA kendiliğinden birini aramayacak. Arama başlatmadan önce numara/kişi doğrulaması yapılır.")
+            .setNegativeButton("İptal",null)
+            .setPositiveButton("Android izin penceresi",(d,w)->
+                requestPermissions(new String[]{Manifest.permission.CALL_PHONE},45))
+            .show();
+    }
     private void showQuickTileSetup() {
         new AlertDialog.Builder(this)
             .setTitle("PANDORA · Başka uygulamada ekrana bak")
@@ -1748,7 +1822,8 @@ public class MainActivity extends Activity {
             .setMessage("İstersen Android Erişilebilirlik ayarlarında PANDORA'ya izin verebilirsin. "
                 +"Bu geniş bir izindir: PANDORA diğer uygulamalardaki erişilebilir ekran metnini görebilir "
                 +"ve belirli düğmelere dokunabilir. Kodumuz yalnızca açık komut verdiğinde ekranı okur. "
-                +"Bu izin WhatsApp/X tarafından bazı ekranlarda kısıtlanabilir. Dilediğinde kapatabilirsin.")
+                +"Android 13 dışarıdan kurulan APK için ayrıca Uygulama bilgileri → sağ üst ⋮ → Kısıtlanmış ayarlara izin ver adımını isteyebilir. Daha sonra Erişilebilirlik bölümünden PANDORA\'yı açmalısın. " +
+                "Korumalı, şifreli veya gizlilikli ekranları Android engelleyebilir. Dilediğinde kapatabilirsin.")
             .setNegativeButton("Vazgeç",null)
             .setPositiveButton("Android ayarları",(d,w)->launch(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
             .show();
