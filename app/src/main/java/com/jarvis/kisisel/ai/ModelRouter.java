@@ -51,6 +51,10 @@ public final class ModelRouter {
  public HttpAiProvider.CancelToken askScreenAsync(String prompt,Callback callback) {
    return askInternal(prompt,callback,false,false,false);
  }
+ /** Specialist task: one read-only model call without personal notes or history. */
+ public HttpAiProvider.CancelToken askTeamAsync(String prompt,Callback callback){
+   return askInternal(prompt,callback,false,false,false);
+ }
  /** Runs an explicit, user-requested task via Hermes even in HYBRID mode. */
  public HttpAiProvider.CancelToken askHermesAsync(String prompt,Callback callback){
    return askInternal(prompt,callback,false,true,true);
