@@ -121,6 +121,14 @@ jobs:
           profile: pixel_5
           disable-animations: true
           script: bash scripts/emulator_smoke.sh
+      - name: Archive Android 13 UI screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA24-Android13-Screen
+          path: pandora24-android13.png
+          if-no-files-found: warn
+          retention-days: 14
 
   private-prerelease:
     needs: [apk, android13-smoke]
