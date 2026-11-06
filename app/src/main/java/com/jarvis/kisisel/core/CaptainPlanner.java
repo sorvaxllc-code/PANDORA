@@ -20,6 +20,15 @@ public final class CaptainPlanner {
         String goal=raw==null?"":raw.trim();
         if(goal.length()>1800)goal=goal.substring(0,1800);
         String s=goal.toLowerCase(new Locale("tr","TR"));
+        if(containsAny(s,"grafik","candlestick","rsi","macd","mum formasyonu",
+            "destek direnç","btc","usdt","binance","coin","teknik analiz"))
+            return new Plan(goal,"Grafik & Kripto","Finans & Risk");
+        if(containsAny(s,"haber","gündem","son dakika","x gönder","twitter","telegram",
+            "akış","takip et","izle","bildir"))
+            return new Plan(goal,"Haber & Kaynak","Doğrulama");
+        if(containsAny(s,"fiyat karşılaştır","fiyat analiz","kar marjı","maliyet hesap",
+            "rekabetçi fiyat","komisyon hesabı"))
+            return new Plan(goal,"Fiyat Analizi","E-Ticaret");
         if(containsAny(s,"shopify","ürün","pazar","seo","müşteri","satış","reklam","ticaret",
             "dropshipping","tedarik","amazon","marka","mağaza"))
             return new Plan(goal,"E-Ticaret","Pazar Araştırması");
@@ -48,6 +57,10 @@ public final class CaptainPlanner {
             +" İzinsiz işlem, ödeme, emir, mesaj, arama veya hesap değişikliği yapma."
             +" Türkçe yaz; kısa, açık ve teknik olarak doğru ol. Asla sahte kaynak oluşturma.";
         switch(role){
+            case "Grafik & Kripto":return common+"\nGerçek mum verisi veya gösterge yoksa formasyon ve al-sat sinyali uydurma. Grafik, hacim, funding, stop ve likidasyon risklerini koşullu senaryolarla açıkla.";
+            case "Haber & Kaynak":return common+"\nX/Telegram hesapları veya RSS sağlayıcısı bağlı değilse haberleri anlık gördüğünü iddia etme. Kaynak URL, tarih ve doğrulama ihtiyacını açıkla.";
+            case "Doğrulama":return common+"\nİddiaların kanıt kalitesini, manipülasyon ve sahte hesap riskini açıkla; anlık haber kaynağı yoksa belirt.";
+            case "Fiyat Analizi":return common+"\nMarj=net gelir-maliyet; kargo/komisyon/KDV/kur varsayımlarını açık göster. Gerçek fiyat verisi yoksa fiyat uydurma.";
             case "E-Ticaret":return common+"\nÜrün, rekabet, maliyet, pazarlama ve somut ilk 3 aksiyona odaklan. Fiyat/komisyon doğrulanmadıysa tahmin de.";
             case "Pazar Araştırması":return common+"\nDoğrulanması gereken varsayımları ve gerçek araştırma adımlarını önceliklendir; canlı web erişimin yoksa açıkça belirt.";
             case "Yazılım":return common+"\nMimari, minimum çalışan çözüm, test ve hata durumları; kodu çalıştırmadıysan test edildi demeden sun.";
