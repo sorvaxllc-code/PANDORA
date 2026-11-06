@@ -2,8 +2,6 @@ name: PANDORA 21 Neon AI Android
 on:
   push:
     branches: [pandora21-neon-agents]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 jobs:
   apk:
