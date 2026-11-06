@@ -505,6 +505,15 @@ public class MainActivity extends Activity {
         addToolsCard(toolBody,"Ses & mikrofon kontrolü",
             "Algılayıcı durumu, son Hey Pandora ve Bluetooth mikrofonu",0xFF3DD6EA,
             ()->showVoiceDiagnostics());
+        addToolsCard(toolBody,"Hey Pandora onay sesi",
+            "Yalnızca gerçek uyandırma sonrası tek hafif ses",
+            0xFFB883FF,()->{
+                boolean now=!prefs.getBoolean("pandora_wake_feedback",true);
+                prefs.edit().putBoolean("pandora_wake_feedback",now).apply();
+                Toast.makeText(this,
+                    "Uyandırma onay sesi "+(now?"açıldı":"kapatıldı"),
+                    Toast.LENGTH_SHORT).show();
+            });
         addToolsCard(toolBody,"Eski PANDORA sürümleri",
             "Aynı mikrofona bağlanabilecek eski uygulamaları kontrol et",
             0xFFFFC174,()->showLegacyPandoras());
