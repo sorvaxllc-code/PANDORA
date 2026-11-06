@@ -58,3 +58,7 @@ javac -encoding UTF-8 -d /tmp/pandora-parser-test \
   app/src/main/java/com/jarvis/kisisel/ScreenCapturePolicy.java \
   tests/ScreenCapturePolicyTest.java
 java -cp /tmp/pandora-parser-test ScreenCapturePolicyTest
+
+# Wake phrase requires complete speech, plausible duration and confidence.
+javac -encoding UTF-8 -d /tmp/pandora-parser-test app/src/main/java/com/jarvis/kisisel/WakePhraseGate.java tests/WakePhraseGateTest.java
+java -cp /tmp/pandora-parser-test WakePhraseGateTest
