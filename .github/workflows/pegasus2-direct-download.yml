@@ -1,0 +1,40 @@
+name: PEGASUS 2 — Direct APK Download
+on:
+  push:
+    branches: [pegasus2-isolated-apk-build]
+    paths:
+      - .github/workflows/pegasus2-direct-download.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download and verify exact APK from successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 42373929346 -R "$GITHUB_REPOSITORY" -n PEGASUS2-APK -D dist
+          test -s dist/app-debug.apk
+          cp dist/app-debug.apk PEGASUS2.apk
+          printf '%s  %s\n' 'a92d68c2bdf71e3901068b86bac64cd6d3634dddad7d2bbb76324f4c9acac0a6' 'PEGASUS2.apk' | sha256sum -c -
+          echo "PEGASUS2_APK_MATCHES_VERIFIED_BUILD=PASS"
+      - name: Create direct download release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "pegasus2-android-test1" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "pegasus2-android-test1" PEGASUS2.apk --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "pegasus2-android-test1" PEGASUS2.apk -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "PEGASUS 2 — Android Test APK" \
+              --notes "PEGASUS 2 test APK; screen control prototype only, Gemini Live not connected. Built by GitHub Actions run 42373929346, SHA-256 a92d68c2bdf71e3901068b86bac64cd6d3634dddad7d2bbb76324f4c9acac0a6. Install separately from PANDORA. Android accessibility permission should not be enabled until user is ready to test." \
+              --prerelease
+          fi
+          gh release view "pegasus2-android-test1" -R "$GITHUB_REPOSITORY" --json url,assets
