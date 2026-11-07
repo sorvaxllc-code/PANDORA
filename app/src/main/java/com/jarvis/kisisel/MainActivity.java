@@ -10,6 +10,10 @@ import com.jarvis.kisisel.ai.SecretVault;
 import com.jarvis.kisisel.ai.GroqVault;
 import com.jarvis.kisisel.ai.HybridRoutePolicy;
 import com.jarvis.kisisel.ai.CloudKeyCheck;
+import com.jarvis.kisisel.safety.EmergencyStop;
+import com.jarvis.kisisel.safety.StopPhraseGate;
+import com.jarvis.kisisel.safety.AdvancedProtectionStatus;
+import com.jarvis.kisisel.safety.RiskPolicy;
 import android.app.Activity;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
@@ -112,6 +116,15 @@ public class MainActivity extends Activity {
     private Button stopButton;
     private HttpAiProvider.CancelToken activeRequest;
     private int requestGeneration=0;
+    private final Runnable onEmergencyStop=()->runOnUiThread(()->{
+        cancelModelRequest(false);
+        PandoraScreenAnalysisController.cancelAll();
+        if(captainTeam!=null)captainTeam.cancel();
+        if(speech!=null)speech.stop();
+        showStatus("DURDURULDU · SES VE GÖREVLER KAPALI");
+        if(stopButton!=null)stopButton.setVisibility(View.GONE);
+        refreshVoiceIndicator();
+    });
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -140,6 +153,7 @@ public class MainActivity extends Activity {
         });
         if(!prefs.contains("pandora_mode")) modelRouter.setMode("HERMES");
         buildUi();
+        EmergencyStop.register(onEmergencyStop);
         enableHeadsetAudioGuard();
         if(!prefs.getBoolean("pandora_setup_v26_seen",false)) {
             prefs.edit().putBoolean("pandora_setup_v26_seen",true).apply();
@@ -159,6 +173,26 @@ public class MainActivity extends Activity {
                 showQuickTileSetup();
             }
         });
+    }
+
+    @Override protected void onResume(){
+        super.onResume();
+        if(prefs==null)return;
+        AdvancedProtectionStatus.State mode=AdvancedProtectionStatus.query(this);
+        boolean now=mode==AdvancedProtectionStatus.State.ENABLED;
+        boolean shown=prefs.getBoolean("pandora_aapm_alerted",false);
+        if(!now && mode==AdvancedProtectionStatus.State.DISABLED)
+            prefs.edit().putBoolean("pandora_aapm_alerted",false).apply();
+        if(now && !shown){
+            prefs.edit().putBoolean("pandora_aapm_alerted",true).apply();
+            getWindow().getDecorView().post(()->{
+                if(isFinishing()||isDestroyed())return;
+                new AlertDialog.Builder(this)
+                    .setTitle("Android Gelişmiş Koruma AÇIK")
+                    .setMessage("Cihazında Gelişmiş Koruma etkin. Android bazı uygulama kurulumlarını ve otomasyon işlemlerini sınırlandırabilir. PANDORA bunu kapatmaz ve güvenlik engellerini aşmaz.")
+                    .setPositiveButton("Anladım",null).show();
+            });
+        }
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -536,6 +570,12 @@ public class MainActivity extends Activity {
         toolBody.addView(text("Araçlar & Ayarlar",22,Color.WHITE,true));
         TextView toolsHint=text("Pandora'nın yetenekleri ve cihaz izinleri",11,MUTED,false);
         toolsHint.setPadding(0,dp(7),0,dp(13));toolBody.addView(toolsHint);
+        addToolsCard(toolBody,"ACİL DURDUR",
+            "Ses, model istekleri ve çalışan ekip görevlerini kes",
+            0xFFFF7777,()->emergencyStopAll());
+        addToolsCard(toolBody,"Android Gelişmiş Koruma",
+            "Koruma modunun sistemden okunabilen durumunu göster",
+            0xFFB49CFF,()->showAdvancedProtectionStatus());
         addToolsCard(toolBody,"PANDORA Genel Müdür · Ekibe görev ver",
             "Uzman model çağrıları ve rapor",0xFFC285FF,()->showCaptainPanel());
         addToolsCard(toolBody,"Ekip raporları",
@@ -944,6 +984,9 @@ public class MainActivity extends Activity {
         runCommand(str);
     }
     private void runCommand(String original) {
+        if(StopPhraseGate.exact(original)) {
+            emergencyStopAll();return;
+        }
         addBubble(true,original,true);
         String q=original.toLowerCase(new Locale("tr","TR")).trim();
         String command = original.trim();
@@ -959,6 +1002,9 @@ public class MainActivity extends Activity {
         if(!withoutWake.equals(command)){
             command=withoutWake.trim();
             q=command.toLowerCase(new Locale("tr","TR"));
+        }
+        if(StopPhraseGate.exact(command) || "dur".equals(q)){
+            emergencyStopAll();return;
         }
         if(q.startsWith("ekibe ") || q.startsWith("müdür ") ||
             q.startsWith("müdüre ") || q.startsWith("ekip ") ||
@@ -1710,6 +1756,23 @@ public class MainActivity extends Activity {
             }).setNegativeButton("Kapat",null).show();
     }
 
+    private void emergencyStopAll(){
+        EmergencyStop.stop();
+        prefs.edit().putBoolean("pandora_auto_wake",false).apply();
+        stopService(new Intent(this,WakeMonitorService.class));
+        PandoraScreenAnalysisController.cancelAll();
+        Toast.makeText(this,"ACİL DUR · Bütün PANDORA görevleri kesildi",Toast.LENGTH_SHORT).show();
+    }
+    private void showAdvancedProtectionStatus(){
+        AdvancedProtectionStatus.State state=AdvancedProtectionStatus.query(this);
+        new AlertDialog.Builder(this).setTitle("Android Gelişmiş Koruma")
+            .setMessage(AdvancedProtectionStatus.label(state)
+                +"\n\nAndroid 16 ve üzerindeki resmi cihaz modu sorgulanır. "
+                +"Eski Android'de tespit edilemiyor demek 'kapalı' anlamına gelmez. "
+                +"PANDORA güvenlik ayarlarını değiştirmez.")
+            .setPositiveButton("Tamam",null).show();
+    }
+
     private void showSystemReadiness() {
         boolean screen=PandoraAccessibilityService.isConnected();
         boolean display=OverlayPulse.permitted(this);
@@ -1727,6 +1790,8 @@ public class MainActivity extends Activity {
             +"\nHey Pandora hizmeti: "+(WakeMonitorService.running?"AÇIK":"KAPALI")
             +"\nGerçek kulaklık mikrofonu: "+WakeMonitorService.microphoneState
             +"\nKulaklık: "+(headset?"BAĞLI":"BAĞLI DEĞİL")
+            +"\nAndroid Gelişmiş Koruma: "+
+                AdvancedProtectionStatus.label(AdvancedProtectionStatus.query(this))
             +"\n\nBu ekran yalnızca izinleri ve seçili ayarları gösterir."
             +" Gerçek X ekranı, WhatsApp çağrısı ve model bağlantısının çalıştığını kanıtlamaz.";
         new AlertDialog.Builder(this)
@@ -1772,7 +1837,8 @@ public class MainActivity extends Activity {
             "6 · Kişiler / isimle arama · "+(contacts?"İZİNLİ":"İZİN GEREKİYOR"),
             "7 · Ekran metnini AI'a gönder · "+(screenCloud?"ONAYLI":"KAPALI"),
             "8 · Android Hızlı Ayarlar ekran kısayolu",
-            "9 · İzinler ve bağlantılar raporu"
+            "9 · İzinler ve bağlantılar raporu",
+            "10 · Android Gelişmiş Koruma durumunu kontrol et"
         };
         new AlertDialog.Builder(this)
             .setTitle("PANDORA · Kurulum Merkezi · İzinleri seç")
@@ -1797,6 +1863,8 @@ public class MainActivity extends Activity {
                         break;
                     case 6:toggleScreenCloudConsent();break;
                     case 7:showQuickTileSetup();break;
+                    case 8:showSystemReadiness();break;
+                    case 9:showAdvancedProtectionStatus();break;
                     default:showSystemReadiness();break;
                 }
             })
@@ -2098,6 +2166,7 @@ public class MainActivity extends Activity {
     }
     private void openUrl(String url) {launch(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));}
     @Override protected void onDestroy() {
+        EmergencyStop.unregister(onEmergencyStop);
         cancelModelRequest(false);
         audioGuard.removeCallbacks(guardAudio);
         voiceHandler.removeCallbacksAndMessages(null);
