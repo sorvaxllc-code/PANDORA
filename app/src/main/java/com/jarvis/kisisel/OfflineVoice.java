@@ -13,6 +13,7 @@ import org.json.JSONObject;
 import org.vosk.Model;
 import org.vosk.Recognizer;
 import org.vosk.android.StorageService;
+import com.jarvis.kisisel.safety.StopPhraseGate;
 
 /**
  * PANDORA hotword pipeline:
@@ -31,6 +32,7 @@ public final class OfflineVoice implements AutoCloseable {
         void result(String phrase);
         void status(String state);
         void error(String reason);
+        void emergencyStop();
     }
     private final Context app;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -115,10 +117,10 @@ public final class OfflineVoice implements AutoCloseable {
     }
     @SuppressLint("MissingPermission")
     private void process(){
-        Recognizer wake=null,command=null;
+        Recognizer wake=null,command=null,stopWord=null;
         AudioRecord mic=null;
         boolean live=false,activated=false;
-        long wakeVoicedMs=0,commandVoicedMs=0;
+        long wakeVoicedMs=0,commandVoicedMs=0,stopVoicedMs=0;
         long wakeDeadline=0;
         long nextRouteAttempt=0;
         long lastRouteCheck=0;
@@ -128,6 +130,12 @@ public final class OfflineVoice implements AutoCloseable {
             wake.setWords(true);
             command=new Recognizer(turkishModel,16000f);
             command.setWords(true);
+            // Lightweight separate Turkish grammar: recognizes an exact
+            // emergency stop while assistant TTS/model work has normal
+            // recognition muted; it reuses the SAME AudioRecord stream.
+            stopWord=new Recognizer(turkishModel,16000f,
+                "[\"dur\",\"iptal et\",\"pandora dur\",\"[unk]\"]");
+            stopWord.setWords(true);
             int min=AudioRecord.getMinBufferSize(16000,
                 AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);
             if(min<=0)throw new IllegalStateException("16 kHz mikrofon desteklenmiyor");
@@ -215,9 +223,26 @@ public final class OfflineVoice implements AutoCloseable {
                     }
                 }
 
+                // Emergency STOP is the ONLY speech allowed while muted,
+                // including TTS. It never executes a model or device action.
+                stopVoicedMs+=voicedDuration(frame,count);
+                boolean stopComplete=stopWord.acceptWaveForm(frame,count);
+                if(stopComplete){
+                    JSONObject finalStop=parsed(stopWord.getResult());
+                    boolean stopVerified=StopPhraseGate.verified(
+                        transcription(finalStop),confidence(finalStop),stopVoicedMs);
+                    stopVoicedMs=0;
+                    if(stopVerified){
+                        muted=true;reset=true;
+                        main.post(()->{if(!closed)listener.emergencyStop();});
+                        continue;
+                    }
+                }
+                if(stopVoicedMs>4500) {
+                    stopWord.reset();stopVoicedMs=0;
+                }
                 if(muted){
-                    // Keep ONE mic recording session to avoid headset activation
-                    // chimes, but immediately discard speech frames while busy.
+                    // Normal wake/commands remain ignored while busy.
                     continue;
                 }
                 if(reset){
@@ -304,6 +329,7 @@ public final class OfflineVoice implements AutoCloseable {
             route.close();
             if(wake!=null)wake.close();
             if(command!=null)command.close();
+            if(stopWord!=null)stopWord.close();
             if(wakeModel!=null){wakeModel.close();wakeModel=null;}
             if(turkishModel!=null){turkishModel.close();turkishModel=null;}
         }
