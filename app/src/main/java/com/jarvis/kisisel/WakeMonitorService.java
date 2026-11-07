@@ -15,6 +15,13 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.media.AudioAttributes;
+import android.media.AudioDeviceCallback;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import com.jarvis.kisisel.safety.EmergencyStop;
+import com.jarvis.kisisel.safety.StopPhraseGate;
+import com.jarvis.kisisel.safety.VoiceApproval;
+import com.jarvis.kisisel.safety.RiskPolicy;
 import android.content.SharedPreferences;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
@@ -76,34 +83,72 @@ public final class WakeMonitorService extends Service {
     private com.jarvis.kisisel.core.CaptainTeam voiceTeam;
     private PandoraCallResolver.Match pendingVoiceCall;
     private long pendingVoiceCallExpiry=0;
+    private final VoiceApproval voiceApproval=new VoiceApproval();
+    private final Runnable emergencyListener=()->handler.post(this::emergencyStopNow);
+    private AudioManager audioManager;
+    private AudioDeviceCallback audioCallback;
     private MemoryDb pendingDatabase;
     private int modelGeneration = 0;
     private final Runnable retry = this::listenOnce;
     // Stop hotword detection and TTS promptly when headphones disconnect.
     // An enabled monitor stays alive but CAPTURES NO AUDIO when headphones disconnect
     // or a phone call is active. It resumes after headphones reconnect.
+    private void enforceHeadsetLock(){
+        if(stopped)return;
+        boolean allowed=PandoraAlerts.headsetConnected(this) && !PandoraAlerts.inCall(this);
+        if(!allowed && !headsetPaused){
+            headsetPaused=true;
+            handler.removeCallbacks(retry);
+            if(offline!=null)offline.pause();
+            if(tts!=null)tts.stop();
+            speaking=false;
+            handler.removeCallbacks(headphoneGuard);
+            handler.removeCallbacks(speechTimeout);
+        }else if(allowed && headsetPaused){
+            headsetPaused=false;
+            if(!processingAction && !speaking)restart(450);
+        }
+    }
     private final Runnable headsetSafety=new Runnable(){
         @Override public void run(){
             if(stopped)return;
-            boolean allowed=PandoraAlerts.headsetConnected(WakeMonitorService.this)
-                && !PandoraAlerts.inCall(WakeMonitorService.this);
-            if(!allowed && !headsetPaused){
-                headsetPaused=true;
-                handler.removeCallbacks(retry);
-                if(offline!=null)offline.pause();
-                if(tts!=null)tts.stop();
-                speaking=false;
-                handler.removeCallbacks(headphoneGuard);
-                handler.removeCallbacks(speechTimeout);
-            }else if(allowed && headsetPaused){
-                headsetPaused=false;
-                if(!processingAction && !speaking)restart(450);
-            }
-            handler.postDelayed(this,500);
+            enforceHeadsetLock();
+            // Phone-call state can change without an audio-device callback.
+            handler.postDelayed(this,1500);
         }
     };
+    private void emergencyStopNow(){
+        if(stopped)return;
+        stopped=true;
+        handler.removeCallbacksAndMessages(null);
+        ++modelGeneration;
+        if(pendingModel!=null){pendingModel.cancel();pendingModel=null;}
+        if(voiceTeam!=null){voiceTeam.cancel();voiceTeam=null;}
+        pendingVoiceCall=null;pendingVoiceCallExpiry=0;
+        voiceApproval.clear();
+        if(tts!=null)tts.stop();
+        speaking=false;processingAction=false;
+        if(offline!=null){offline.close();offline=null;}
+        getSharedPreferences("jarvis_settings",MODE_PRIVATE)
+            .edit().putBoolean("pandora_auto_wake",false).apply();
+        microphoneState="Acil durdurma · Kapalı";audioReady=false;
+        stopSelf();
+    }
     @Override public void onCreate() {
         super.onCreate();
+        EmergencyStop.register(emergencyListener);
+        audioManager=(AudioManager)getSystemService(AUDIO_SERVICE);
+        if(audioManager!=null){
+            audioCallback=new AudioDeviceCallback(){
+                @Override public void onAudioDevicesAdded(AudioDeviceInfo[] added){
+                    handler.post(()->enforceHeadsetLock());
+                }
+                @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] removed){
+                    handler.post(()->enforceHeadsetLock());
+                }
+            };
+            audioManager.registerAudioDeviceCallback(audioCallback,handler);
+        }
         tts = new TextToSpeech(this, status -> handler.post(() -> {
             if (stopped || tts == null || status != TextToSpeech.SUCCESS) return;
             int lang = tts.setLanguage(Locale.forLanguageTag("tr-TR"));
@@ -130,8 +175,10 @@ public final class WakeMonitorService extends Service {
         }));
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            stopSelf(); return START_NOT_STICKY;
+        if(intent!=null && ACTION_STOP.equals(intent.getAction())){
+            EmergencyStop.stop();
+            emergencyStopNow();
+            return START_NOT_STICKY;
         }
         if(intent != null && (ACTION_SCREEN.equals(intent.getAction()) ||
                 ACTION_VIDEO.equals(intent.getAction()))) {
@@ -188,6 +235,7 @@ public final class WakeMonitorService extends Service {
                 if(offline!=null)offline.pause();
                 if(!speaking&&!processingAction)restart(650);
             }
+            @Override public void emergencyStop(){EmergencyStop.stop();}
             @Override public void status(String state){
                 if(stopped)return;
                 microphoneState=state;
@@ -227,6 +275,10 @@ public final class WakeMonitorService extends Service {
         ArrayList<String> texts=results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
         if(texts==null)return false;
         for(String phrase:texts) {
+            if(StopPhraseGate.exact(phrase)){
+                EmergencyStop.stop();
+                return true;
+            }
             long now=android.os.SystemClock.elapsedRealtime();
             WakeQuickCommand.Kind kind=conversation.accept(phrase,now);
             if(kind==null)continue;
@@ -279,7 +331,7 @@ public final class WakeMonitorService extends Service {
         if(low.equals("aramayı onayla") || low.equals("aramayı başlat")
             || low.equals("ara onayla"))return confirmVoiceCall();
         if(low.equals("aramayı iptal et") || low.equals("arama iptal")){
-            pendingVoiceCall=null;pendingVoiceCallExpiry=0;
+            pendingVoiceCall=null;pendingVoiceCallExpiry=0;voiceApproval.clear();
             return finishScreenAction("PANDORA · Arama","Bekleyen arama iptal edildi.");
         }
         if(low.endsWith(" ara") && low.length()>5
@@ -327,7 +379,9 @@ public final class WakeMonitorService extends Service {
                     "Bu isimde birden çok numara var. Tam adıyla veya numarasıyla tekrar söyle.");
         }
         pendingVoiceCall=matches.get(0);
-        pendingVoiceCallExpiry=android.os.SystemClock.elapsedRealtime()+35000L;
+        long now=android.os.SystemClock.elapsedRealtime();
+        pendingVoiceCallExpiry=now+30000L;
+        voiceApproval.request("call:"+pendingVoiceCall.number,now);
         return finishScreenAction("PANDORA · Sesli arama onayı",
             pendingVoiceCall.label+" kişisini "+pendingVoiceCall.number+
             " numarasından aramamı istedin. Aramayı başlatmak için "
@@ -338,9 +392,16 @@ public final class WakeMonitorService extends Service {
         pendingVoiceCall=null;
         long expiry=pendingVoiceCallExpiry;
         pendingVoiceCallExpiry=0L;
-        if(target==null||android.os.SystemClock.elapsedRealtime()>expiry)
+        long now=android.os.SystemClock.elapsedRealtime();
+        boolean approved=target!=null && voiceApproval.consume(
+            "call:"+target.number,"aramayı onayla",now);
+        voiceApproval.clear();
+        if(target==null||now>expiry || !approved)
             return finishScreenAction("PANDORA · Telefon",
                 "Onay bekleyen bir arama yok. Kimi arayacağımı tekrar söyle.");
+        if(RiskPolicy.check(RiskPolicy.Action.CALL_CONTACT,false,approved)
+            !=RiskPolicy.Decision.ALLOW)
+            return finishScreenAction("PANDORA · Telefon","Sesli işlem onayı doğrulanamadı.");
         if(checkSelfPermission(Manifest.permission.CALL_PHONE)
             !=PackageManager.PERMISSION_GRANTED)
             return finishScreenAction("PANDORA · Telefon",
@@ -512,7 +573,10 @@ public final class WakeMonitorService extends Service {
         processingAction=false;
         conversation.reset();
         ++modelGeneration;
-        pendingVoiceCall=null;pendingVoiceCallExpiry=0L;
+        pendingVoiceCall=null;pendingVoiceCallExpiry=0L;voiceApproval.clear();
+        EmergencyStop.unregister(emergencyListener);
+        if(audioManager!=null && audioCallback!=null)
+            audioManager.unregisterAudioDeviceCallback(audioCallback);
         if(voiceTeam!=null){voiceTeam.close();voiceTeam=null;}
         if(pendingModel!=null)pendingModel.cancel();
         pendingModel=null;
