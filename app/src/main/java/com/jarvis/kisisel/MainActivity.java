@@ -175,26 +175,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    @Override protected void onResume(){
-        super.onResume();
-        if(prefs==null)return;
-        AdvancedProtectionStatus.State mode=AdvancedProtectionStatus.query(this);
-        boolean now=mode==AdvancedProtectionStatus.State.ENABLED;
-        boolean shown=prefs.getBoolean("pandora_aapm_alerted",false);
-        if(!now && mode==AdvancedProtectionStatus.State.DISABLED)
-            prefs.edit().putBoolean("pandora_aapm_alerted",false).apply();
-        if(now && !shown){
-            prefs.edit().putBoolean("pandora_aapm_alerted",true).apply();
-            getWindow().getDecorView().post(()->{
-                if(isFinishing()||isDestroyed())return;
-                new AlertDialog.Builder(this)
-                    .setTitle("Android Gelişmiş Koruma AÇIK")
-                    .setMessage("Cihazında Gelişmiş Koruma etkin. Android bazı uygulama kurulumlarını ve otomasyon işlemlerini sınırlandırabilir. PANDORA bunu kapatmaz ve güvenlik engellerini aşmaz.")
-                    .setPositiveButton("Anladım",null).show();
-            });
-        }
-    }
-
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
@@ -1229,6 +1209,23 @@ public class MainActivity extends Activity {
     private void enableHeadsetAudioGuard(){audioGuard.postDelayed(guardAudio,250);}
     @Override protected void onResume(){
         super.onResume();
+        if(prefs!=null){
+        AdvancedProtectionStatus.State mode=AdvancedProtectionStatus.query(this);
+        boolean now=mode==AdvancedProtectionStatus.State.ENABLED;
+        boolean shown=prefs.getBoolean("pandora_aapm_alerted",false);
+        if(!now && mode==AdvancedProtectionStatus.State.DISABLED)
+            prefs.edit().putBoolean("pandora_aapm_alerted",false).apply();
+        if(now && !shown){
+            prefs.edit().putBoolean("pandora_aapm_alerted",true).apply();
+            getWindow().getDecorView().post(()->{
+                if(isFinishing()||isDestroyed())return;
+                new AlertDialog.Builder(this)
+                    .setTitle("Android Gelişmiş Koruma AÇIK")
+                    .setMessage("Cihazında Gelişmiş Koruma etkin. Android bazı uygulama kurulumlarını ve otomasyon işlemlerini sınırlandırabilir. PANDORA bunu kapatmaz ve güvenlik engellerini aşmaz.")
+                    .setPositiveButton("Anladım",null).show();
+            });
+        }
+        }
         if(speech!=null&&!PandoraAlerts.headsetConnected(this))speech.stop();
         voiceHandler.removeCallbacks(voiceTicker);
         voiceHandler.postDelayed(voiceTicker,300);
