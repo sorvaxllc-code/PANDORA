@@ -1,0 +1,89 @@
+name: PANDORA 27 — APK integrity and Android 13 install smoke
+on:
+  push:
+    branches: [pandora27-phase1-safety]
+    paths:
+      - .github/workflows/pandora27-install-check.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/pandora27-install-check.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  safe-zip-asset:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Download exact original signed PANDORA 27 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 42344794663 -R "$GITHUB_REPOSITORY" -n PANDORA27-STABLE-APK
+          test -s app-release.apk
+          mv app-release.apk PANDORA27.apk
+          printf '%s  %s\n' '1da55ca4f05ccbb8c957a25bf163d94f928bee808484ad9c3d8d7af6f48b0281' 'PANDORA27.apk' | sha256sum -c -
+          echo "ORIGINAL_VERIFIED_APK_SHA256=1da55ca4f05ccbb8c957a25bf163d94f928bee808484ad9c3d8d7af6f48b0281"
+      - name: Wrap unmodified original APK in standard ZIP
+        run: |
+          set -euo pipefail
+          zip -9 PANDORA27-KURULUM.zip PANDORA27.apk
+          unzip -t PANDORA27-KURULUM.zip
+          unzip -p PANDORA27-KURULUM.zip PANDORA27.apk | sha256sum
+      - name: Add alternative ZIP to current private release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "v2.7.0-phase1" PANDORA27-KURULUM.zip --clobber -R "$GITHUB_REPOSITORY"
+          gh release view "v2.7.0-phase1" --json assets -R "$GITHUB_REPOSITORY"
+  android13-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner storage for emulator
+        run: |
+          df -h
+          sudo rm -rf /usr/local/lib/android/sdk/ndk /usr/local/lib/android/sdk/cmake /opt/hostedtoolcache/CodeQL /usr/share/dotnet || true
+          df -h
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android toolchain for package manifest inspection
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Fetch identical signed APK and inspect Android metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 42344794663 -R "$GITHUB_REPOSITORY" -n PANDORA27-STABLE-APK
+          mv app-release.apk PANDORA27.apk
+          printf '%s  %s\n' '1da55ca4f05ccbb8c957a25bf163d94f928bee808484ad9c3d8d7af6f48b0281' 'PANDORA27.apk' | sha256sum -c -
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs PANDORA27.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging PANDORA27.apk | head -16
+      - name: Android 13 emulator real PackageManager install and launch
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          target: google_apis
+          profile: pixel_4
+          cores: 2
+          ram-size: 2048M
+          heap-size: 256M
+          disk-size: 2048M
+          disable-animations: true
+          emulator-options: "-no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim"
+          script: |
+            set -e
+            adb shell getprop ro.build.version.release
+            adb install -r PANDORA27.apk
+            adb shell pm path com.jarvis.kisisel.stable
+            adb shell dumpsys package com.jarvis.kisisel.stable | grep -E "versionCode=|versionName=|Package \[" | head -12
+            echo "ANDROID_13_INSTALL_PANDORA27=PASS"

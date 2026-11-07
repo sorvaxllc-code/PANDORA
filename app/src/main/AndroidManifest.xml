@@ -2,12 +2,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Android 16+: read-only Advanced Protection state; no power to disable it. -->
+    <uses-permission android:name="android.permission.QUERY_ADVANCED_PROTECTION_MODE" />
     <queries>
+        <!-- Detect older PANDORA preview apps that can compete for the same mic. -->
+        <package android:name="com.jarvis.kisisel.trial17" />
+        <package android:name="com.jarvis.kisisel.trial20" />
+        <package android:name="com.jarvis.kisisel.trial21" />
+        <package android:name="com.jarvis.kisisel.trial22" />
+        <package android:name="com.jarvis.kisisel.trial23" />
+        <package android:name="com.pandora.hermespreview19" />
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
@@ -16,7 +29,7 @@
         android:allowBackup="false"
         android:label="${pandoraAppName}"
         android:theme="@style/JarvisTheme"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/pandora_icon" android:roundIcon="@drawable/pandora_icon"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <activity
@@ -43,7 +56,7 @@
             android:name=".PandoraQuickTileService"
             android:exported="true"
             android:label="PANDORA · Ekrana Bak"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@drawable/pandora_status_icon"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
@@ -59,6 +72,7 @@
             <meta-data android:name="android.accessibilityservice"
                 android:resource="@xml/pandora_accessibility_service" />
         </service>
+        <receiver android:name=".EmergencyStopReceiver" android:exported="false" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:enabled="true" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>

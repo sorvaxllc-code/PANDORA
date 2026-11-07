@@ -22,8 +22,24 @@ public final class PandoraScreenAnalysisController {
     private static HttpAiProvider.CancelToken pending;
     private static MemoryDb database;
     private static Consumer<String> callback;
+    static {
+        // Quick-Tile analyses can outlive MainActivity. STOP must cancel them too.
+        com.jarvis.kisisel.safety.EmergencyStop.register(
+            PandoraScreenAnalysisController::cancelAll);
+    }
 
     private PandoraScreenAnalysisController() {}
+
+    /** Stop pending OCR/model callbacks without announcing stale success. */
+    public static void cancelAll(){
+        MAIN.post(()->{
+            ++serial;busy=false;
+            if(pending!=null)pending.cancel();
+            pending=null;
+            if(database!=null)database.close();
+            database=null;callback=null;
+        });
+    }
 
     public static void request(Context context, Consumer<String> whenFinished) {
         Context app=context.getApplicationContext();
@@ -102,7 +118,7 @@ public final class PandoraScreenAnalysisController {
             finish(app,ticket,"Uygulama ekranı analiz sırasında değişti; güvenlik için işlem iptal edildi.");
             return;
         }
-        if(text==null||text.trim().length()<60) {
+        if(text==null||text.trim().length()<16) {
             finish(app,ticket,"Ekranda okunabilir içerik bulunamadı veya Android bu ekranı koruyor.");
             return;
         }

@@ -1,0 +1,40 @@
+name: PANDORA 27 — Direct APK Download
+on:
+  push:
+    branches: [pandora27-phase1-safety]
+    paths:
+      - .github/workflows/pandora27-direct-download.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-private-apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fetch previously verified signed APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 42344794663 -R "$GITHUB_REPOSITORY" -n PANDORA27-STABLE-APK -D dist
+          test -s dist/app-release.apk
+          cp dist/app-release.apk PANDORA27.apk
+          printf '%s  %s\n' '1da55ca4f05ccbb8c957a25bf163d94f928bee808484ad9c3d8d7af6f48b0281' 'PANDORA27.apk' | sha256sum -c -
+      - name: Create or update private GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "v2.7.0-phase1" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v2.7.0-phase1" PANDORA27.apk --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "v2.7.0-phase1" PANDORA27.apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "PANDORA 27 · Aşama 1" \
+              --notes "Aynı imzalı Android güncellemesi: com.jarvis.kisisel.stable. Uygulamayı kaldırmadan mevcut PANDORA 26 üzerine kur. Dosya imzası SHA-256: 1da55ca4f05ccbb8c957a25bf163d94f928bee808484ad9c3d8d7af6f48b0281" \
+              --prerelease
+          fi
+          gh release view "v2.7.0-phase1" --repo "$GITHUB_REPOSITORY" --json url,assets

@@ -12,8 +12,8 @@ import android.media.AudioManager;
 import android.os.Build;
 
 public final class PandoraAlerts {
-    public static final String ALERT_CHANNEL = "pandora_important_v1";
-    public static final String MONITOR_CHANNEL = "pandora_wake_monitor_v1";
+    public static final String ALERT_CHANNEL = "pandora_important_silent_v20";
+    public static final String MONITOR_CHANNEL = "pandora_wake_monitor_silent_v22";
     private PandoraAlerts() {}
 
     public static void ensureChannels(Context context) {
@@ -21,11 +21,16 @@ public final class PandoraAlerts {
         if (manager == null) return;
         NotificationChannel urgent = new NotificationChannel(ALERT_CHANNEL,
                 "PANDORA önemli uyarılar", NotificationManager.IMPORTANCE_HIGH);
-        urgent.setDescription("Kullanıcının izin verdiği önemli olay ve test uyarıları.");
+        urgent.setDescription("Kulaklıksız sessiz, görsel önemli uyarılar.");
+        urgent.setSound(null,null);
+        urgent.enableVibration(false);
         manager.createNotificationChannel(urgent);
         NotificationChannel monitor = new NotificationChannel(MONITOR_CHANNEL,
-                "PANDORA sesli uyandırma", NotificationManager.IMPORTANCE_LOW);
-        monitor.setDescription("Deneysel mikrofon dinleme hizmeti çalışırken görünür.");
+                "PANDORA sessiz sesli uyandırma", NotificationManager.IMPORTANCE_LOW);
+        monitor.setDescription("Kulaklık yokken mikrofon kapalıdır. Android zorunlu durum bildirimi.");
+        monitor.setSound(null,null);
+        monitor.enableVibration(false);
+        monitor.setShowBadge(false);
         manager.createNotificationChannel(monitor);
     }
     public static boolean canNotify(Context context) {
@@ -44,7 +49,7 @@ public final class PandoraAlerts {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return false;
         Notification message = new Notification.Builder(context, ALERT_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.pandora_status_icon)
                 .setContentTitle(title).setContentText(body)
                 .setStyle(new Notification.BigTextStyle().bigText(body))
                 .setAutoCancel(true).setContentIntent(openApp(context))
@@ -55,9 +60,9 @@ public final class PandoraAlerts {
     }
     public static Notification wakeNotification(Context context) {
         ensureChannels(context);
-        Intent stop = new Intent(context, WakeMonitorService.class);
-        stop.setAction(WakeMonitorService.ACTION_STOP);
-        PendingIntent stopIntent = PendingIntent.getService(context, 144, stop,
+        Intent stop = new Intent(context, EmergencyStopReceiver.class);
+        stop.setAction(EmergencyStopReceiver.ACTION_STOP_ALL);
+        PendingIntent stopIntent = PendingIntent.getBroadcast(context, 144, stop,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Intent screen = new Intent(context, WakeMonitorService.class).setAction(WakeMonitorService.ACTION_SCREEN);
         PendingIntent screenIntent = PendingIntent.getService(context, 145, screen,
@@ -66,13 +71,13 @@ public final class PandoraAlerts {
         PendingIntent videoIntent = PendingIntent.getService(context, 146, video,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Builder(context, MONITOR_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("PANDORA · Deneysel sesli uyandırma")
-                .setContentText("Mikrofon kullanılıyor · Durdurmak için dokun")
+                .setSmallIcon(R.drawable.pandora_status_icon)
+                .setContentTitle("PANDORA · Pandora sesli asistan")
+                .setContentText("Yalnızca kulaklıkla dinleme · Durdurmak için dokun")
                 .setContentIntent(openApp(context))
                 .addAction(android.R.drawable.ic_menu_view, "Ekrana bak", screenIntent)
                 .addAction(android.R.drawable.ic_menu_camera, "Görüntülüye geç", videoIntent)
-                .addAction(android.R.drawable.ic_media_pause, "Durdur", stopIntent)
+                .addAction(android.R.drawable.ic_media_pause, "ACİL DUR", stopIntent)
                 .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).build();
     }
