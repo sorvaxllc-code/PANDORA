@@ -7,6 +7,7 @@ import android.speech.tts.TextToSpeech;
 import android.media.AudioAttributes;
 import android.speech.tts.UtteranceProgressListener;
 import java.util.Locale;
+import com.jarvis.kisisel.safety.EmergencyStop;
 
 /** Reads a Quick Settings analysis result only on headphones; notifications always work. */
 public final class PandoraHeadphoneReply {
@@ -16,10 +17,12 @@ public final class PandoraHeadphoneReply {
         if(!app.getSharedPreferences("jarvis_settings",Context.MODE_PRIVATE).getBoolean("voice",true)
             || !PandoraAlerts.headsetConnected(app) || PandoraAlerts.inCall(app))return;
         final Handler main=new Handler(Looper.getMainLooper());
+        final long ticket=EmergencyStop.generation();
         final TextToSpeech[] engine=new TextToSpeech[1];
         engine[0]=new TextToSpeech(app,status -> main.post(() -> {
             TextToSpeech tts=engine[0];
             if(tts==null)return;
+            if(EmergencyStop.isCancelled(ticket)){tts.shutdown();return;}
             if(status!=TextToSpeech.SUCCESS) { tts.shutdown();return; }
             int language=tts.setLanguage(Locale.forLanguageTag("tr-TR"));
             if(language==TextToSpeech.LANG_NOT_SUPPORTED || language==TextToSpeech.LANG_MISSING_DATA
@@ -30,15 +33,20 @@ public final class PandoraHeadphoneReply {
                 .setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build());
+            final Runnable[] stopHooks={null};
             final boolean[] ended={false};
             final Runnable[] watch={null};
             final Runnable close=() -> {
                 if(ended[0])return;
                 ended[0]=true;
+                EmergencyStop.unregister(stopHooks[0]);
                 if(watch[0]!=null)main.removeCallbacks(watch[0]);
                 tts.stop();
                 tts.shutdown();
             };
+            stopHooks[0]=()->main.post(close);
+            EmergencyStop.register(stopHooks[0]);
+            if(EmergencyStop.isCancelled(ticket)){close.run();return;}
             watch[0]=new Runnable() {
                 @Override public void run() {
                     if(ended[0])return;
