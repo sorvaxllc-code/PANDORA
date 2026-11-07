@@ -37,66 +37,66 @@ jobs:
           rep('    private var wm: WindowManager? = null','    private var wm: WindowManager? = null\n    private var controlPanel: LinearLayout? = null')
           rep('        active = this\n        stopped = true','        active = this\n        serviceInfo = serviceInfo.apply { flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS }\n        stopped = true')
           rep('        box.addView(label)\n        box.addView(info)',"""        val trigger = Button(this).apply {
-            text = "P"
-            contentDescription = "PEGASUS ekran kontrol panelini aç veya kapat"
-            textSize = 16f
-            isAllCaps = false
-            setTextColor(0xFF0A0A0A.toInt())
-            background = GradientDrawable().apply {
-                setColor(0xFFF0F0F0.toInt())
-                cornerRadius = d(30).toFloat()
-            }
-        }
-        box.addView(trigger, LinearLayout.LayoutParams(d(48), d(48)))
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        controlPanel = panel
-        panel.addView(label)
-        panel.addView(info)""")
+                      text = "P"
+                      contentDescription = "PEGASUS ekran kontrol panelini aç veya kapat"
+                      textSize = 16f
+                      isAllCaps = false
+                      setTextColor(0xFF0A0A0A.toInt())
+                      background = GradientDrawable().apply {
+                          setColor(0xFFF0F0F0.toInt())
+                          cornerRadius = d(30).toFloat()
+                      }
+                  }
+                  box.addView(trigger, LinearLayout.LayoutParams(d(48), d(48)))
+                  val panel = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      visibility = View.GONE
+                  }
+                  controlPanel = panel
+                  panel.addView(label)
+                  panel.addView(info)""")
           rep('            box.addView(row)','            panel.addView(row)')
           rep('        actionRow("Kaydır" to { scrollDown() }, "DUR" to { emergencyStop() })',"""        actionRow("Kaydır" to { scrollDown() }, "DUR" to { emergencyStop() })
-        actionRow("Küçült" to { panel.visibility = View.GONE; requestRelayout() })
-        box.addView(panel)
-        trigger.setOnClickListener {
-            panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-            requestRelayout()
-        }""")
+                  actionRow("Küçült" to { panel.visibility = View.GONE; requestRelayout() })
+                  box.addView(panel)
+                  trigger.setOnClickListener {
+                      panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                      requestRelayout()
+                  }""")
           rep('            d(260), WindowManager.LayoutParams.WRAP_CONTENT,','            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,')
           rep('    private fun updateText(s: String) {',"""    private fun requestRelayout() {
-        val box = ui ?: return
-        val manager = wm ?: return
-        try {
-            manager.updateViewLayout(box, box.layoutParams as WindowManager.LayoutParams)
-        } catch (_: Exception) { }
-    }
-
-    private fun appRoot(): AccessibilityNodeInfo? {
-        val appWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-        val chosen = appWindows.firstOrNull { it.isFocused }
-            ?: appWindows.firstOrNull { it.isActive }
-            ?: appWindows.firstOrNull()
-        return chosen?.root ?: rootInActiveWindow
-    }
-
-    private fun updateText(s: String) {""")
+                  val box = ui ?: return
+                  val manager = wm ?: return
+                  try {
+                      manager.updateViewLayout(box, box.layoutParams as WindowManager.LayoutParams)
+                  } catch (_: Exception) { }
+              }
+          
+              private fun appRoot(): AccessibilityNodeInfo? {
+                  val appWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                  val chosen = appWindows.firstOrNull { it.isFocused }
+                      ?: appWindows.firstOrNull { it.isActive }
+                      ?: appWindows.firstOrNull()
+                  return chosen?.root ?: rootInActiveWindow
+              }
+          
+              private fun updateText(s: String) {""")
           rep('rootInActiveWindow ?: run','appRoot() ?: run')
           rep('''        targets = collect(root)
-        selected = -1
-        showSelected()''','''        targets = collect(root)
-        selected = -1
-        updateText(if (targets.isEmpty()) "0 öğe · Erişilebilir düğme yok"
-            else "${targets.size} öğe · ◀ ▶ ile düğme seç")''')
+                  selected = -1
+                  showSelected()''','''        targets = collect(root)
+                  selected = -1
+                  updateText(if (targets.isEmpty()) "0 öğe · Erişilebilir düğme yok"
+                      else "${targets.size} öğe · ◀ ▶ ile düğme seç")''')
           rep('''        val t = targets[selected.coerceIn(targets.indices)]''','''        if (selected !in targets.indices) { updateText("Önce ◀ / ▶ ile bir düğme seç"); return }
-        val t = targets[selected]''')
+                  val t = targets[selected]''')
           rep('selected = (selected + step + targets.size) % targets.size','selected = if (selected == -1) { if (step > 0) 0 else targets.size-1 } else (selected+step+targets.size)%targets.size')
           rep('Önce Tara ve öğe seç','Tara → ◀/▶ seç → Dokun')
           rep('Öğe değişmiş · Yeniden tara','Düğme değişmiş · Yeniden tara')
           rep('''        targets = emptyList() // require a fresh scan after every action
-        updateText(if (ok)''','''        targets = emptyList() // require a fresh scan after every action
-        selected = -1
-        updateText(if (ok)''')
+                  updateText(if (ok)''','''        targets = emptyList() // require a fresh scan after every action
+                  selected = -1
+                  updateText(if (ok)''')
           rep('Korunan sistem ekranı · Tarama kapalı',"Sistem ayarı korumalı · PEGASUS'ta dene")
           rep('Korunan sistem ekranı · Kaydırma reddedildi','Sistem ayarı korumalı · Kaydırma kapalı')
           rep('        ui = null\n        info = null','        ui = null\n        info = null\n        controlPanel = null')
