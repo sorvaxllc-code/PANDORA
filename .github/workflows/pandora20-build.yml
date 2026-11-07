@@ -1,0 +1,48 @@
+name: PANDORA 20 Jarvis Hermes APK
+on:
+  push:
+    branches:
+      - pandora20-jarvis-hermes-20261107
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore uploaded PANDORA source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pandora20
+          base64 -d pandora20-jarvis-hermes.source.tar.xz.base64 | tar -xJf - -C pandora20
+          test -f pandora20/app/build.gradle
+          test -f pandora20/app/src/main/java/com/jarvis/kisisel/ai/HermesClient.java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.1'
+      - name: Build isolated debug APK
+        working-directory: pandora20
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Inspect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s pandora20/app/build/outputs/apk/debug/app-debug.apk
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --print-certs pandora20/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA-20-Jarvis-Hermes-APK
+          path: pandora20/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
