@@ -25,6 +25,17 @@ public final class PandoraScreenAnalysisController {
 
     private PandoraScreenAnalysisController() {}
 
+    /** Stop pending OCR/model callbacks without announcing stale success. */
+    public static void cancelAll(){
+        MAIN.post(()->{
+            ++serial;busy=false;
+            if(pending!=null)pending.cancel();
+            pending=null;
+            if(database!=null)database.close();
+            database=null;callback=null;
+        });
+    }
+
     public static void request(Context context, Consumer<String> whenFinished) {
         Context app=context.getApplicationContext();
         MAIN.post(() -> start(app,whenFinished));
