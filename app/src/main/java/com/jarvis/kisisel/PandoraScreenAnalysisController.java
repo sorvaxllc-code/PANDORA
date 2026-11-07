@@ -22,6 +22,11 @@ public final class PandoraScreenAnalysisController {
     private static HttpAiProvider.CancelToken pending;
     private static MemoryDb database;
     private static Consumer<String> callback;
+    static {
+        // Quick-Tile analyses can outlive MainActivity. STOP must cancel them too.
+        com.jarvis.kisisel.safety.EmergencyStop.register(
+            PandoraScreenAnalysisController::cancelAll);
+    }
 
     private PandoraScreenAnalysisController() {}
 
