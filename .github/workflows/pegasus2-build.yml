@@ -1,0 +1,62 @@
+name: PEGASUS 2 — Isolated Android APK build
+on:
+  push:
+    branches: [pegasus2-isolated-apk-build]
+    paths:
+      - 'pegasus2/**'
+      - '.github/workflows/pegasus2-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pegasus2/**'
+      - '.github/workflows/pegasus2-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pegasus2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and unpack PEGASUS-only source
+        run: |
+          set -euo pipefail
+          mkdir -p pegasus2/project
+          cat pegasus2/base64/part*.txt | base64 --decode > pegasus2/source.tar.xz
+          printf '%s  %s\n' '1bdc86e41e41249eae6501f8d544f7868ca075c55c6d26820a418f967b3f1f66' 'pegasus2/source.tar.xz' | sha256sum --check
+          tar -xJf pegasus2/source.tar.xz -C pegasus2/project
+          test -f pegasus2/project/app/build.gradle.kts
+          test -f pegasus2/project/app/src/main/assets/nexus.html
+          echo "PEGASUS2_SOURCE_INTEGRITY=PASS"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Build PEGASUS 2 Android debug APK
+        working-directory: pegasus2/project
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :app:assembleDebug
+          test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Inspect APK package and signing
+        working-directory: pegasus2/project
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | head -16
+          "$SIGNER" verify --verbose "$APK"
+          sha256sum "$APK"
+          echo "PEGASUS2_APK_SIGNATURE=PASS"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: PEGASUS2-APK
+          path: pegasus2/project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
