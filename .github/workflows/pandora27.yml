@@ -1,0 +1,121 @@
+name: PANDORA 27 — Phase 1 Security + Advanced Protection
+on:
+  push:
+    branches: [pandora27-phase1-safety]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+      - name: Verify and stage Vosk offline voice models
+        run: python3 scripts/prepare_voice_model.py
+      - name: All raw Java safety/routing test output
+        shell: bash
+        run: |
+          set -o pipefail
+          bash tests/RUN_TESTS.sh 2>&1 | tee phase1-unit-tests.log
+      - name: Assemble Android debug APK (raw log)
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:assembleDebug 2>&1 | tee phase1-debug-build.log
+      - name: Verify Android debug APK signature (raw log)
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk" | tee phase1-debug-signature.log
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | head -4 | tee -a phase1-debug-signature.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA27-TEST-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Prepare stable signing keys if configured
+        id: signing
+        shell: bash
+        env:
+          KEY_B64: ${{ secrets.PANDORA_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEY_B64" || -z "$PASSWORD" ]]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No stable signing credentials; debug APK still available"
+            exit 0
+          fi
+          umask 077
+          echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/pandora.p12"
+          test -s "$RUNNER_TEMP/pandora.p12"
+          echo "PANDORA_KEYSTORE_PATH=$RUNNER_TEMP/pandora.p12" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+      - name: Assemble PANDORA 27 stable upgrade
+        if: steps.signing.outputs.available == 'true'
+        env:
+          PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease 2>&1 | tee phase1-stable-build.log
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            app/build/outputs/apk/release/app-release.apk | tee phase1-stable-signature.log
+          grep -Fq '3e4fc38052b9dbd7bb9324158303817d4b2015315737e2983af49458a2d73afc' phase1-stable-signature.log
+          echo "PANDORA_SIGNATURE_MATCH_PREVIOUS_RELEASE=PASS" | tee -a phase1-stable-signature.log
+      - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.available == 'true'
+        with:
+          name: PANDORA27-STABLE-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          if [[ -n "$PANDORA_KEYSTORE_PATH" ]]; then rm -f "$PANDORA_KEYSTORE_PATH"; fi
+
+      - name: Upload unedited raw test/build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA27-RAW-LOGS
+          path: |
+            phase1-unit-tests.log
+            phase1-debug-build.log
+            phase1-debug-signature.log
+            phase1-stable-build.log
+            phase1-stable-signature.log
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Archive full source (without models / credentials)
+        if: always()
+        shell: bash
+        run: |
+          zip -q -r PANDORA27-PHASE1-SOURCE.zip \
+            app/src/main/java app/src/main/res app/src/main/AndroidManifest.xml \
+            app/build.gradle tests .github/workflows/pandora27.yml \
+            -x "*.png" "*.jpg"
+      - name: Upload full phase-one source files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PANDORA27-PHASE1-SOURCE
+          path: PANDORA27-PHASE1-SOURCE.zip
+          retention-days: 30
+          if-no-files-found: warn
