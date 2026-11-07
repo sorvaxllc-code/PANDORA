@@ -42,7 +42,7 @@ jobs:
                       textSize = 16f
                       isAllCaps = false
                       setTextColor(0xFF0A0A0A.toInt())
-                      background = GradientDrawable().apply {
+                      this.background = GradientDrawable().apply {
                           setColor(0xFFF0F0F0.toInt())
                           cornerRadius = d(30).toFloat()
                       }
