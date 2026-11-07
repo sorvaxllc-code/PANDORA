@@ -60,9 +60,9 @@ public final class PandoraAlerts {
     }
     public static Notification wakeNotification(Context context) {
         ensureChannels(context);
-        Intent stop = new Intent(context, WakeMonitorService.class);
-        stop.setAction(WakeMonitorService.ACTION_STOP);
-        PendingIntent stopIntent = PendingIntent.getService(context, 144, stop,
+        Intent stop = new Intent(context, EmergencyStopReceiver.class);
+        stop.setAction(EmergencyStopReceiver.ACTION_STOP_ALL);
+        PendingIntent stopIntent = PendingIntent.getBroadcast(context, 144, stop,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Intent screen = new Intent(context, WakeMonitorService.class).setAction(WakeMonitorService.ACTION_SCREEN);
         PendingIntent screenIntent = PendingIntent.getService(context, 145, screen,
@@ -77,7 +77,7 @@ public final class PandoraAlerts {
                 .setContentIntent(openApp(context))
                 .addAction(android.R.drawable.ic_menu_view, "Ekrana bak", screenIntent)
                 .addAction(android.R.drawable.ic_menu_camera, "Görüntülüye geç", videoIntent)
-                .addAction(android.R.drawable.ic_media_pause, "Durdur", stopIntent)
+                .addAction(android.R.drawable.ic_media_pause, "ACİL DUR", stopIntent)
                 .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).build();
     }
