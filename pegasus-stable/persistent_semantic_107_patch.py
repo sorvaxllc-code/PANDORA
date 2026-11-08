@@ -501,6 +501,23 @@ replace(activity,'''        fun emergencyStop() {
             }
         }''')
 
+# User consent text must disclose that semantic tools send permitted visible
+# screen text to Gemini; older 1.0.6 dialog only mentioned button labels.
+replace(activity, '''"Bu oturumda Gemini Live yalnızca PEGASUS ve hesap makinesi " +
+                "ekranındaki sınırlı düğme etiketlerini okuyup Google'a iletebilir. " +''',
+''' "Bu oturumda PEGASUS, hesap makinesi ve Wikipedia ekranındaki " +
+                "görünür erişilebilir metinleri sen istediğinde Gemini'ye aktarabilir. " +''')
+replace(activity, '''        fun disablePhoneTools() {
+            runOnUiThread {
+                phoneToolsAllowed = false
+                PegasusLiveService.instance?.setToolsAllowed(false)
+                PegasusAccessService.active?.emergencyStop()''',
+'''        fun disablePhoneTools() {
+            runOnUiThread {
+                phoneToolsAllowed = false
+                PegasusLiveService.instance?.requestStop()
+                PegasusAccessService.active?.emergencyStop()''')
+
 # 5. Expose an explicit, informed persistent-mode switch; overlay is optional.
 replace(html,'''Gemini Live yalnızca PEGASUS açıkken gönderilir.''',
 '''Gemini Live, sen başlattığın sürece bildirimle arka planda da mikrofon kullanır.''') if False else None
