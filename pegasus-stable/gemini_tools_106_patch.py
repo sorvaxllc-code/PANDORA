@@ -200,7 +200,7 @@ rep(activity,'''    private lateinit var live: PegasusGeminiLive''',
                     .setPositiveButton("Dokun") { _, _ ->
                         // Fresh window/selection, sensitive label and package are
                         // checked again by AccessibilityService at execution time.
-                        reply(service.geminiAction("pegasus_tap"))
+                        reply(service?.geminiAction("pegasus_tap") ?: result(false, "Erişilebilirlik hizmeti kapalı"))
                     }
                     .setOnCancelListener {
                         reply(result(false,"Kullanıcı onay penceresini kapattı"))
