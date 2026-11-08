@@ -95,15 +95,9 @@ rep(a,'''        if (stopped) return fail("Ekran erişimi durmuş · oturum izni
             .put("detail","PEGASUS ekran izin penceresine yanıt ver, ardından tekrar sor")
         val root=foregroundApplicationRoot() ?:''')
 
-# First fix reading; then align scan/click/scroll with the same window source.
-rep(a,'''        val root = rootInActiveWindow ?: run { updateText("Erişilebilir ekran yok") ; return }''',
-'''        val root = foregroundApplicationRoot() ?: run {
-            updateText("Android erişilebilir uygulama penceresi sunmadı"); return
-        }''')
-rep(a,'''        val root = rootInActiveWindow ?: run { updateText("Ekran değişmiş · Yeniden tara") ; return }''',
-'''        val root = foregroundApplicationRoot() ?: run { updateText("Ekran değişmiş · Yeniden tara"); return }''')
-rep(a,'''        val root = rootInActiveWindow ?: run { updateText("Ekran bulunamadı") ; return }''',
-'''        val root = foregroundApplicationRoot() ?: run { updateText("Ekran bulunamadı"); return }''')
+# Existing PEGASUS manual scan/click/scroll paths already call appRoot() via
+# earlier version's workflow; do not replace non-existent rootInActiveWindow
+# anchors again. The Gemini read/translate path uses foregroundApplicationRoot().
 
 # Use focused actual app window for all package guards.
 rep(a,'''    private fun safeGeminiScreen(): Boolean {
