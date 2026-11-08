@@ -1,3 +1,4 @@
+# Rebuild after aligning accessibility scan code to existing appRoot() implementation
 # Rebuild after Android 12+ touch pass-through alpha hardening (0.75)
 # Rebuild after explicit semantic screen-text consent and emergency STOP correction
 name: PEGASUS Stable — Screen Access Diagnostics 1.0.11
