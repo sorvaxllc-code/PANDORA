@@ -123,6 +123,12 @@ replace(access,'''    private fun safeGeminiScreen(): Boolean {''',
     }
 
     private fun safeGeminiScreen(): Boolean {''')
+replace(access, '''        if (!safeGeminiScreen()) {''',
+'''        // Read/translate has a distinct privacy checked allowlist; it is not
+        // the same operation as scanning clickable buttons.
+        if (name == "pegasus_read_screen" || name == "pegasus_translate_screen")
+            return geminiReadScreen()
+        if (!safeGeminiScreen()) {''')
 replace(access, '''            "pegasus_scan" -> {''',
 '''            "pegasus_read_screen", "pegasus_translate_screen" -> geminiReadScreen()
             "pegasus_scan" -> {''')
