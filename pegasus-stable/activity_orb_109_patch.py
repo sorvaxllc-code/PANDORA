@@ -181,7 +181,8 @@ rep(service,'''        lastStatus="Gemini Live kapalı · mikrofon kapalı"
         super.onDestroy()''')
 
 # Toggle from PEGASUS settings, independent of existing P-panel toggle.
-rep(activity,'''        fun setOverlayEnabled(enabled: Boolean) {''',
+rep(activity,'''        @JavascriptInterface
+        fun setOverlayEnabled(enabled: Boolean) {''',
 '''        @JavascriptInterface
         fun setActivityOrbEnabled(enabled: Boolean) {
             runOnUiThread {
