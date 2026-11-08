@@ -125,10 +125,10 @@ jobs:
           old='WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,'
           if old not in s: raise RuntimeError('Overlay constructor width not found')
           s=s.replace(old,'d(76), WindowManager.LayoutParams.WRAP_CONTENT,',1)
-          old='manager.updateViewLayout(box, params)'
+          old='manager.updateViewLayout(box, box.layoutParams as WindowManager.LayoutParams)'
           if old not in s: raise RuntimeError('Overlay relayout call not found')
-          insertion = "params.width = if (controlPanel?.visibility == View.VISIBLE) (resources.displayMetrics.widthPixels - d(24)).coerceAtMost(d(310)) else d(76)"
-          s=s.replace(old,insertion+chr(10)+(' '*12)+old,1)
+          insertion = 'val params = box.layoutParams as WindowManager.LayoutParams' + chr(10) + (' '*12) + 'params.width = if (controlPanel?.visibility == View.VISIBLE) (resources.displayMetrics.widthPixels - d(24)).coerceAtMost(d(310)) else d(76)' + chr(10) + (' '*12) + 'manager.updateViewLayout(box, params)'
+          s=s.replace(old,insertion,1)
           p.write_text(s)
           p=Path('app/build.gradle.kts')
           s=p.read_text()
