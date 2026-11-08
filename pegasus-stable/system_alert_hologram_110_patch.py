@@ -122,6 +122,10 @@ rep(service,'''    private fun say(message:String) {''',
             gravity=android.view.Gravity.TOP or android.view.Gravity.END
             x=(12*d).toInt()
             y=(115*d).toInt()
+            // Android 12+ rejects touch pass-through if a third-party
+            // TYPE_APPLICATION_OVERLAY is too opaque (default threshold 0.8).
+            // This indicator is passive: keep the window safely translucent.
+            alpha=0.75f
             setTitle("PEGASUS · Canlı P Hologram")
         }
         try {
