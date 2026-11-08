@@ -255,15 +255,15 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "pegasus-stable-v1.0.1" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "pegasus-stable-v1" PEGASUS-STABLE.apk --clobber -R "$GITHUB_REPOSITORY"
+            gh release upload "pegasus-stable-v1.0.1" PEGASUS-STABLE.apk --clobber -R "$GITHUB_REPOSITORY"
           else
-            gh release create "pegasus-stable-v1" PEGASUS-STABLE.apk -R "$GITHUB_REPOSITORY" \
+            gh release create "pegasus-stable-v1.0.1" PEGASUS-STABLE.apk -R "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "PEGASUS Stable 1.0.1 — Voice command test" \
               --notes "Voice test: explicit microphone permission and one-shot Turkish commands from the PEGASUS accessibility panel. Retains ai.pegasus.nexus.stable app ID and permanent signing key; update is intended to install over stable versionCode 500. Commands: Tara, Sonraki, Onceki, Dokun, Kaydir, Dur. No hotword or Gemini Live. Device testing required; voice recognition availability varies by Android device." \
               --prerelease
           fi
-          gh release view "pegasus-stable-v1" -R "$GITHUB_REPOSITORY" --json url,assets
+          gh release view "pegasus-stable-v1.0.1" -R "$GITHUB_REPOSITORY" --json url,assets
       - name: Delete temporary keystore
         if: always()
         run: |
