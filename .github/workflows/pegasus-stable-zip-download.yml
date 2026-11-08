@@ -1,0 +1,32 @@
+name: PEGASUS Stable — Android-friendly ZIP download
+on:
+  push:
+    branches: [pegasus-stable-permanent-updates]
+    paths:
+      - .github/workflows/pegasus-stable-zip-download.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  deliver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch and verify published permanent APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download pegasus-stable-v1 --pattern PEGASUS-STABLE.apk --repo "$GITHUB_REPOSITORY"
+          printf '%s  %s\n' '63e9e7c234a001ef573e75412c44363659c9366cdc5c34c1b780b67f98569715' 'PEGASUS-STABLE.apk' | sha256sum -c -
+          zip -9 PEGASUS-STABLE-KURULUM.zip PEGASUS-STABLE.apk
+          unzip -t PEGASUS-STABLE-KURULUM.zip
+          test -s PEGASUS-STABLE-KURULUM.zip
+          unzip -p PEGASUS-STABLE-KURULUM.zip PEGASUS-STABLE.apk | sha256sum
+      - name: Publish Android-compatible ZIP asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload pegasus-stable-v1 PEGASUS-STABLE-KURULUM.zip --clobber --repo "$GITHUB_REPOSITORY"
+          gh release view pegasus-stable-v1 --json url,assets --repo "$GITHUB_REPOSITORY"
