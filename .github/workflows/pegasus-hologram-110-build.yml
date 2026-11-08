@@ -1,0 +1,318 @@
+# Rebuild after explicit semantic screen-text consent and emergency STOP correction
+name: PEGASUS Stable — Full P Hologram SYSTEM_ALERT_WINDOW 1.0.10
+on:
+  push:
+    branches: [pegasus-stable-permanent-updates]
+    paths: [.github/workflows/pegasus-hologram-110-build.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore exact isolated PEGASUS 2 project
+        run: |
+          set -euo pipefail
+          mkdir -p pegasus3/project
+          cat pegasus2/base64/part*.txt | base64 --decode > pegasus3/source.tar.xz
+          printf '%s  %s\n' '1bdc86e41e41249eae6501f8d544f7868ca075c55c6d26820a418f967b3f1f66' 'pegasus3/source.tar.xz' | sha256sum -c -
+          tar -xJf pegasus3/source.tar.xz -C pegasus3/project
+      - name: Apply PEGASUS 3 UI and safety fixes
+        working-directory: pegasus3/project
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          f=Path('app/src/main/java/ai/pegasus/nexus/PegasusAccessService.kt')
+          s=f.read_text()
+          def rep(old,new):
+              global s
+              if old not in s: raise RuntimeError('MISSING PATCH ANCHOR: '+old[:100])
+              s=s.replace(old,new)
+          rep('import android.accessibilityservice.GestureDescription','import android.accessibilityservice.GestureDescription\nimport android.accessibilityservice.AccessibilityServiceInfo')
+          rep('import android.view.WindowManager','import android.view.WindowManager\nimport android.view.View\nimport android.view.accessibility.AccessibilityWindowInfo')
+          rep('private var selected = 0','private var selected = -1')
+          rep('selected = 0','selected = -1')
+          rep('    private var wm: WindowManager? = null','    private var wm: WindowManager? = null\n    private var controlPanel: LinearLayout? = null')
+          rep('        active = this\n        stopped = true','        active = this\n        serviceInfo = serviceInfo.apply { flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS }\n        stopped = true')
+          rep('        box.addView(label)\n        box.addView(info)',"""        val trigger = Button(this).apply {
+                      text = "P"
+                      contentDescription = "PEGASUS ekran kontrol panelini aç veya kapat"
+                      textSize = 16f
+                      isAllCaps = false
+                      setTextColor(0xFF0A0A0A.toInt())
+                      this.background = GradientDrawable().apply {
+                          setColor(0xFFF0F0F0.toInt())
+                          cornerRadius = d(30).toFloat()
+                      }
+                  }
+                  box.addView(trigger, LinearLayout.LayoutParams(d(48), d(48)))
+                  val panel = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      visibility = View.GONE
+                  }
+                  controlPanel = panel
+                  panel.addView(label)
+                  panel.addView(info)""")
+          rep('            box.addView(row)','            panel.addView(row)')
+          rep('        actionRow("Kaydır" to { scrollDown() }, "DUR" to { emergencyStop() })',"""        actionRow("Kaydır" to { scrollDown() }, "DUR" to { emergencyStop() })
+                  actionRow("Küçült" to { panel.visibility = View.GONE; requestRelayout() })
+                  box.addView(panel)
+                  trigger.setOnClickListener {
+                      panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                      requestRelayout()
+                  }""")
+          rep('            d(260), WindowManager.LayoutParams.WRAP_CONTENT,','            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,')
+          rep('    private fun updateText(s: String) {',"""    private fun requestRelayout() {
+                  val box = ui ?: return
+                  val manager = wm ?: return
+                  try {
+                      manager.updateViewLayout(box, box.layoutParams as WindowManager.LayoutParams)
+                  } catch (_: Exception) { }
+              }
+          
+              private fun appRoot(): AccessibilityNodeInfo? {
+                  val appWindows = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+                  val chosen = appWindows.firstOrNull { it.isFocused }
+                      ?: appWindows.firstOrNull { it.isActive }
+                      ?: appWindows.firstOrNull()
+                  return chosen?.root ?: rootInActiveWindow
+              }
+          
+              private fun updateText(s: String) {""")
+          rep('rootInActiveWindow ?: run','appRoot() ?: run')
+          rep('''        targets = collect(root)
+                  selected = -1
+                  showSelected()''','''        targets = collect(root)
+                  selected = -1
+                  updateText(if (targets.isEmpty()) "0 öğe · Erişilebilir düğme yok"
+                      else "${targets.size} öğe · ◀ ▶ ile düğme seç")''')
+          rep('''        val t = targets[selected.coerceIn(targets.indices)]''','''        if (selected !in targets.indices) { updateText("Önce ◀ / ▶ ile bir düğme seç"); return }
+                  val t = targets[selected]''')
+          rep('selected = (selected + step + targets.size) % targets.size','selected = if (selected == -1) { if (step > 0) 0 else targets.size-1 } else (selected+step+targets.size)%targets.size')
+          rep('Önce Tara ve öğe seç','Tara → ◀/▶ seç → Dokun')
+          rep('Öğe değişmiş · Yeniden tara','Düğme değişmiş · Yeniden tara')
+          rep('''        targets = emptyList() // require a fresh scan after every action
+                  updateText(if (ok)''','''        targets = emptyList() // require a fresh scan after every action
+                  selected = -1
+                  updateText(if (ok)''')
+          rep('Korunan sistem ekranı · Tarama kapalı',"Sistem ayarı korumalı · PEGASUS'ta dene")
+          rep('Korunan sistem ekranı · Kaydırma reddedildi','Sistem ayarı korumalı · Kaydırma kapalı')
+          rep('        ui = null\n        info = null','        ui = null\n        info = null\n        controlPanel = null')
+          f.write_text(s)
+          p=Path('app/src/main/java/ai/pegasus/nexus/ActionPolicy.kt')
+          s=p.read_text().replace('"com.android.permissioncontroller", "com.google.android.permissioncontroller",','"com.android.permissioncontroller", "com.google.android.permissioncontroller",\n        "com.android.settings", "com.miui.securitycenter", "com.miui.permcenter",')
+          p.write_text(s)
+          p=Path('app/src/main/res/xml/pegasus_accessibility.xml')
+          s=p.read_text().replace('android:canRetrieveWindowContent="true"','android:canRetrieveWindowContent="true"\n    android:accessibilityFlags="flagRetrieveInteractiveWindows"')
+          p.write_text(s)
+          p=Path('app/build.gradle.kts')
+          s=p.read_text().replace('applicationId = "ai.pegasus.nexus"','applicationId = "ai.pegasus.nexus.test3"').replace('versionCode = 2','versionCode = 3').replace('versionName = "0.2.0-screen-control-test"','versionName = "0.3.0-control-diagnostics"')
+          p.write_text(s)
+          p=Path('app/src/main/res/values/strings.xml')
+          s=p.read_text().replace('<string name="app_name">PEGASUS</string>','<string name="app_name">PEGASUS 3</string>')
+          p.write_text(s)
+          print("PEGASUS_4_BASE_PATCH=PASS")
+          PY
+      - name: Fix narrow controls and PEGASUS 4 identity
+        working-directory: pegasus3/project
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/java/ai/pegasus/nexus/PegasusAccessService.kt')
+          s=p.read_text()
+          old='WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,'
+          if old not in s: raise RuntimeError('Overlay constructor width not found')
+          s=s.replace(old,'d(76), WindowManager.LayoutParams.WRAP_CONTENT,',1)
+          old='manager.updateViewLayout(box, box.layoutParams as WindowManager.LayoutParams)'
+          if old not in s: raise RuntimeError('Overlay relayout call not found')
+          insertion = 'val params = box.layoutParams as WindowManager.LayoutParams' + chr(10) + (' '*12) + 'params.width = if (controlPanel?.visibility == View.VISIBLE) (resources.displayMetrics.widthPixels - d(24)).coerceAtMost(d(310)) else d(76)' + chr(10) + (' '*12) + 'manager.updateViewLayout(box, params)'
+          s=s.replace(old,insertion,1)
+          p.write_text(s)
+          p=Path('app/build.gradle.kts')
+          s=p.read_text()
+          if 'ai.pegasus.nexus.test3' not in s: raise RuntimeError('PEGASUS3 package anchor missing')
+          s=s.replace('ai.pegasus.nexus.test3','ai.pegasus.nexus.test4')
+          s=s.replace('versionCode = 3','versionCode = 4')
+          s=s.replace('versionName = "0.3.0-control-diagnostics"','versionName = "0.4.0-readable-controls"')
+          p.write_text(s)
+          p=Path('app/src/main/res/values/strings.xml')
+          s=p.read_text().replace('PEGASUS 3','PEGASUS 4')
+          p.write_text(s)
+          print('PEGASUS4_OVERLAY_WIDTH_FIX=PASS')
+          PY
+      - name: Freeze PEGASUS app ID and permanent release signing
+        working-directory: pegasus3/project
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/build.gradle.kts")
+          s=p.read_text()
+          assert 'applicationId = "ai.pegasus.nexus.test4"' in s, "expected final temporary ID"
+          assert 'versionCode = 4' in s
+          assert 'buildTypes { release { isMinifyEnabled = false } }' in s
+          s=s.replace('applicationId = "ai.pegasus.nexus.test4"','applicationId = "ai.pegasus.nexus.stable"')
+          s=s.replace('versionCode = 4','versionCode = 500')
+          s=s.replace('versionName = "0.4.0-readable-controls"','versionName = "1.0.0-stable"')
+          s=s.replace('    buildTypes { release { isMinifyEnabled = false } }',"""    signingConfigs {
+                create("pegasusStable") {
+                    storeFile = file(System.getenv("PANDORA_KEYSTORE_PATH") ?: error("Missing permanent signing key path"))
+                    storePassword = System.getenv("PANDORA_KEYSTORE_PASSWORD") ?: error("Missing signing password")
+                    keyAlias = "pandora"
+                    keyPassword = System.getenv("PANDORA_KEYSTORE_PASSWORD") ?: error("Missing signing password")
+                }
+            }
+            buildTypes {
+                getByName("release") {
+                    isMinifyEnabled = false
+                    signingConfig = signingConfigs.getByName("pegasusStable")
+                }
+            }""")
+          p.write_text(s)
+          p=Path("app/src/main/res/values/strings.xml")
+          s=p.read_text().replace("PEGASUS 4","PEGASUS")
+          p.write_text(s)
+          print("PEGASUS_PERMANENT_PACKAGE_AND_SIGNING_CONFIG=PASS")
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Recover protected permanent release certificate
+        env:
+          KEYSTORE_B64: ${{ secrets.PANDORA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_B64" || -z "$KEYSTORE_PASS" ]]; then
+            echo "::error::Permanent signing secrets unavailable; refusing to create a randomly signed APK."
+            exit 1
+          fi
+          umask 077
+          path="$RUNNER_TEMP/pegasus-permanent.p12"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$path"
+          test -s "$path"
+          echo "PANDORA_KEYSTORE_PATH=$path" >> "$GITHUB_ENV"
+          echo "PEGASUS_PERMANENT_KEY_AVAILABLE=PASS"
+      - name: Apply opt-in Turkish voice command test
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/voice_patch.py
+      - name: Add foreground-only optional Gemini Live session and SDK
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/gemini_live_patch.py
+      - name: Patch one-time Android Keystore API key and direct Gemini Live, with audio diagnostics
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/gemini_direct_patch.py
+      - name: Accept Gemini AQ. auth keys as well as legacy AIza keys
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/gemini_authkey_patch.py
+      - name: Fix Gemini setup state handling and binary frame diagnostics
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/gemini_handshake_patch.py
+      - name: Add allowlisted Gemini Live tool calling and user confirmations
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/gemini_tools_106_patch.py
+      - name: Add foreground microphone service, semantic screen reading and overlay-free control
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/persistent_semantic_107_patch.py
+      - name: Add screen consent and diagnostic reasons without bypassing Android protections
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/screen_consent_108_patch.py
+      - name: Add NEMESIS-inspired PEGASUS P passive activity orb and settings
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/activity_orb_109_patch.py
+      - name: Create true transparent SYSTEM_ALERT_WINDOW floating P hologram
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/system_alert_hologram_110_patch.py
+      - name: Build PEGASUS stable 1.0.10 signed APK
+        env:
+          PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease
+          test -s app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/PEGASUS-STABLE.apk"
+      - name: Verify immutable app identity and signing certificate
+        run: |
+          set -euo pipefail
+          APK=PEGASUS-STABLE.apk
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$SIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/pegasus-certs.txt"
+          "$AAPT" dump badging "$APK" | head -16
+          "$AAPT" dump badging "$APK" | grep -q "package: name='ai.pegasus.nexus.stable' versionCode='510'"
+          grep -qi '3e4fc38052b9dbd7bb9324158303817d4b2015315737e2983af49458a2d73afc' "$RUNNER_TEMP/pegasus-certs.txt"
+          sha256sum "$APK"
+          echo "PEGASUS_STABLE_ID_AND_PERSISTENT_CERT=PASS"
+      - name: Build a future version and verify update compatibility
+        working-directory: pegasus3/project
+        env:
+          PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sed -i 's/versionCode = 510/versionCode = 511/' app/build.gradle.kts
+          sed -i 's/versionName = "1.0.10-system-alert-hologram"/versionName = "1.0.11-update-compat-test"/' app/build.gradle.kts
+          gradle --no-daemon :app:assembleRelease
+          FUTURE=app/build/outputs/apk/release/app-release.apk
+          test -s "$FUTURE"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$AAPT" dump badging "$FUTURE" | grep -q "package: name='ai.pegasus.nexus.stable' versionCode='511'"
+          "$SIGNER" verify --verbose --print-certs "$FUTURE" | tee "$RUNNER_TEMP/pegasus-future-certs.txt"
+          grep -qi '3e4fc38052b9dbd7bb9324158303817d4b2015315737e2983af49458a2d73afc' "$RUNNER_TEMP/pegasus-future-certs.txt"
+          echo "PEGASUS_FUTURE_APK_SAME_PACKAGE_AND_SIGNING_KEY=PASS"
+      - name: Upload only the first stable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PEGASUS-STABLE-APK
+          path: PEGASUS-STABLE.apk
+          if-no-files-found: error
+      - name: Publish stable baseline download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "pegasus-stable-v1.0.10" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "pegasus-stable-v1.0.10" PEGASUS-STABLE.apk --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "pegasus-stable-v1.0.10" PEGASUS-STABLE.apk -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "PEGASUS Stable 1.0.10 — Full SYSTEM_ALERT_WINDOW P Hologram" \
+              --notes "Implements the user's NEMESIS-inspired animated monochrome P hologram as a true transparent TYPE_APPLICATION_OVERLAY using SYSTEM_ALERT_WINDOW special permission (must be granted manually in Android Settings). Display is service-owned, independent of AccessibilityService and small P controls, touch-pass-through, visible only during explicitly started Gemini Live sessions, removed on microphone stop. Keeps original NEXUS theme and existing Gemini/consent system unchanged; only re-labels two existing hologram settings buttons. Same package ai.pegasus.nexus.stable, permanent certificate, versionCode 510 updates 500-509. Android may suppress third-party overlays on protected screens. Device testing pending." \
+              --prerelease
+          fi
+          gh release view "pegasus-stable-v1.0.10" -R "$GITHUB_REPOSITORY" --json url,assets
+      - name: Delete temporary keystore
+        if: always()
+        run: |
+          if [[ -n "${PANDORA_KEYSTORE_PATH:-}" ]]; then
+            rm -f -- "$PANDORA_KEYSTORE_PATH"
+          fi
