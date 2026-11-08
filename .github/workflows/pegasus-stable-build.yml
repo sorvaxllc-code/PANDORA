@@ -1,4 +1,4 @@
-name: PEGASUS Stable — Permanent Updates
+name: PEGASUS Stable — Voice Test 1.0.1
 on:
   push:
     branches: [pegasus-stable-permanent-updates]
@@ -200,7 +200,12 @@ jobs:
           test -s "$path"
           echo "PANDORA_KEYSTORE_PATH=$path" >> "$GITHUB_ENV"
           echo "PEGASUS_PERMANENT_KEY_AVAILABLE=PASS"
-      - name: Build PEGASUS stable 1.0 signed APK
+      - name: Apply opt-in Turkish voice command test
+        working-directory: pegasus3/project
+        run: |
+          set -euo pipefail
+          python3 ../../pegasus-stable/voice_patch.py
+      - name: Build PEGASUS stable 1.0.1 signed APK
         env:
           PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
         working-directory: pegasus3/project
@@ -217,7 +222,7 @@ jobs:
           SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$SIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/pegasus-certs.txt"
           "$AAPT" dump badging "$APK" | head -16
-          "$AAPT" dump badging "$APK" | grep -q "package: name='ai.pegasus.nexus.stable' versionCode='500'"
+          "$AAPT" dump badging "$APK" | grep -q "package: name='ai.pegasus.nexus.stable' versionCode='501'"
           grep -qi '3e4fc38052b9dbd7bb9324158303817d4b2015315737e2983af49458a2d73afc' "$RUNNER_TEMP/pegasus-certs.txt"
           sha256sum "$APK"
           echo "PEGASUS_STABLE_ID_AND_PERSISTENT_CERT=PASS"
@@ -227,14 +232,14 @@ jobs:
           PANDORA_KEYSTORE_PASSWORD: ${{ secrets.PANDORA_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          sed -i 's/versionCode = 500/versionCode = 501/' app/build.gradle.kts
-          sed -i 's/versionName = "1.0.0-stable"/versionName = "1.0.1-stable"/' app/build.gradle.kts
+          sed -i 's/versionCode = 501/versionCode = 502/' app/build.gradle.kts
+          sed -i 's/versionName = "1.0.1-voice-test"/versionName = "1.0.2-update-compat-test"/' app/build.gradle.kts
           gradle --no-daemon :app:assembleRelease
           FUTURE=app/build/outputs/apk/release/app-release.apk
           test -s "$FUTURE"
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
           SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          "$AAPT" dump badging "$FUTURE" | grep -q "package: name='ai.pegasus.nexus.stable' versionCode='501'"
+          "$AAPT" dump badging "$FUTURE" | grep -q "package: name='ai.pegasus.nexus.stable' versionCode='502'"
           "$SIGNER" verify --verbose --print-certs "$FUTURE" | tee "$RUNNER_TEMP/pegasus-future-certs.txt"
           grep -qi '3e4fc38052b9dbd7bb9324158303817d4b2015315737e2983af49458a2d73afc' "$RUNNER_TEMP/pegasus-future-certs.txt"
           echo "PEGASUS_FUTURE_APK_SAME_PACKAGE_AND_SIGNING_KEY=PASS"
@@ -249,13 +254,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if gh release view "pegasus-stable-v1" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view "pegasus-stable-v1.0.1" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "pegasus-stable-v1" PEGASUS-STABLE.apk --clobber -R "$GITHUB_REPOSITORY"
           else
             gh release create "pegasus-stable-v1" PEGASUS-STABLE.apk -R "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "PEGASUS Stable 1.0 — Permanent update base" \
-              --notes "Permanent app ID ai.pegasus.nexus.stable. Signed with the existing protected release key in GitHub Actions. Previous PEGASUS 2/3/4 debug test package names and signatures cannot be upgraded in place. One-time migration to Stable required; future updates must retain identical package ID, signer and increase versionCode. Safe initial test prototype; Gemini Live not yet implemented." \
+              --title "PEGASUS Stable 1.0.1 — Voice command test" \
+              --notes "Voice test: explicit microphone permission and one-shot Turkish commands from the PEGASUS accessibility panel. Retains ai.pegasus.nexus.stable app ID and permanent signing key; update is intended to install over stable versionCode 500. Commands: Tara, Sonraki, Onceki, Dokun, Kaydir, Dur. No hotword or Gemini Live. Device testing required; voice recognition availability varies by Android device." \
               --prerelease
           fi
           gh release view "pegasus-stable-v1" -R "$GITHUB_REPOSITORY" --json url,assets
