@@ -115,34 +115,24 @@ jobs:
           p.write_text(s)
           print("PEGASUS_4_BASE_PATCH=PASS")
           PY
-      - name: Fix collapsed and expanded overlay widths and separate PEGASUS 4 identity
+      - name: Fix narrow controls and PEGASUS 4 identity
         working-directory: pegasus3/project
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p=Path('app/src/main/java/ai/pegasus/nexus/PegasusAccessService.kt')
           s=p.read_text()
-          old='''        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,'''
-          new='''        val params = WindowManager.LayoutParams(
-            d(76), WindowManager.LayoutParams.WRAP_CONTENT,'''
-          if old not in s: raise RuntimeError('Overlay width anchor missing')
-          s=s.replace(old,new,1)
-          old='''            val params = box.layoutParams as WindowManager.LayoutParams
-            manager.updateViewLayout(box, params)'''
-          new='''            val params = box.layoutParams as WindowManager.LayoutParams
-            // Fixed width when expanded: weighted action buttons must never be measured at zero width.
-            // Compact size when collapsed: only the P bubble remains on screen.
-            params.width = if (controlPanel?.visibility == View.VISIBLE)
-                (resources.displayMetrics.widthPixels - d(24)).coerceAtMost(d(310))
-            else d(76)
-            manager.updateViewLayout(box, params)'''
-          if old not in s: raise RuntimeError('Relayout width anchor missing')
-          s=s.replace(old,new,1)
+          old='WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,'
+          if old not in s: raise RuntimeError('Overlay constructor width not found')
+          s=s.replace(old,'d(76), WindowManager.LayoutParams.WRAP_CONTENT,',1)
+          old='manager.updateViewLayout(box, params)'
+          if old not in s: raise RuntimeError('Overlay relayout call not found')
+          insertion = "params.width = if (controlPanel?.visibility == View.VISIBLE) (resources.displayMetrics.widthPixels - d(24)).coerceAtMost(d(310)) else d(76)"
+          s=s.replace(old,insertion+chr(10)+(' '*12)+old,1)
           p.write_text(s)
           p=Path('app/build.gradle.kts')
           s=p.read_text()
-          assert 'ai.pegasus.nexus.test3' in s
+          if 'ai.pegasus.nexus.test3' not in s: raise RuntimeError('PEGASUS3 package anchor missing')
           s=s.replace('ai.pegasus.nexus.test3','ai.pegasus.nexus.test4')
           s=s.replace('versionCode = 3','versionCode = 4')
           s=s.replace('versionName = "0.3.0-control-diagnostics"','versionName = "0.4.0-readable-controls"')
@@ -191,6 +181,6 @@ jobs:
             gh release create "pegasus4-panel-fix" PEGASUS4.apk -R "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "PEGASUS 4 — Screen Control Panel Fix" \
-              --notes "Standalone test package ai.pegasus.nexus.test3 to preserve PEGASUS 2 data/signature. No Gemini, no network, no unattended AI control. Access service is manually enabled and stopped by default." \
+              --notes "Standalone test package ai.pegasus.nexus.test4 to preserve PEGASUS 2 data/signature. No Gemini, no network, no unattended AI control. Access service is manually enabled and stopped by default." \
               --prerelease
           fi
