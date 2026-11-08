@@ -102,7 +102,7 @@ rep(service,'''    private fun say(message:String) {''',
         lockDownWebViewFileAccess()
         v.webViewClient=object:android.webkit.WebViewClient() {
             override fun onPageFinished(view:android.webkit.WebView?, url:String?) {
-                if (view===hologram && url=="file:///android_asset/pegasus_activity_orb.html") {
+                if (view != null && view === hologram && url=="file:///android_asset/pegasus_activity_orb.html") {
                     view.evaluateJavascript(
                         "window.setPegasusState("+
                         org.json.JSONObject.quote(hologramState)+");",null)
@@ -122,7 +122,7 @@ rep(service,'''    private fun say(message:String) {''',
             gravity=android.view.Gravity.TOP or android.view.Gravity.END
             x=(12*d).toInt()
             y=(115*d).toInt()
-            title="PEGASUS · Canlı P Hologram"
+            setTitle("PEGASUS · Canlı P Hologram")
         }
         try {
             wm.addView(v,lp)
