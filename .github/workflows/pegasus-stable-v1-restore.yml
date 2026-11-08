@@ -1,0 +1,27 @@
+name: Restore immutable PEGASUS Stable 1.0.0 baseline download
+on:
+  push:
+    branches: [pegasus-stable-permanent-updates]
+    paths: [.github/workflows/pegasus-stable-v1-restore.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Recover original v1 APK from untouched v1 ZIP release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download pegasus-stable-v1 -R "$GITHUB_REPOSITORY" --pattern PEGASUS-STABLE-KURULUM.zip --dir .
+          unzip -p PEGASUS-STABLE-KURULUM.zip PEGASUS-STABLE.apk > PEGASUS-STABLE.apk
+          echo '63e9e7c234a001ef573e75412c44363659c9366cdc5c34c1b780b67f98569715  PEGASUS-STABLE.apk' | sha256sum -c -
+      - name: Restore v1 APK asset without changing v1.0.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload pegasus-stable-v1 PEGASUS-STABLE.apk --clobber -R "$GITHUB_REPOSITORY"
+          gh release view pegasus-stable-v1 --json url,assets -R "$GITHUB_REPOSITORY"
