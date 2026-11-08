@@ -1,3 +1,4 @@
+# Rebuild after Android 12+ touch pass-through alpha hardening (0.75)
 # Rebuild after explicit semantic screen-text consent and emergency STOP correction
 name: PEGASUS Stable — Full P Hologram SYSTEM_ALERT_WINDOW 1.0.10
 on:
